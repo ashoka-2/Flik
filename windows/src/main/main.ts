@@ -77,16 +77,61 @@ class FlikConnectorApp {
     }
   }
 
-  // Identifies the primary local IPv4 address for QR pairing and connections
+  // Identifies the best local IPv4 address for QR pairing and connections
   private detectLocalIp(): void {
     const interfaces = os.networkInterfaces();
+    const candidates: { ip: string; name: string; score: number }[] = [];
+
     for (const name of Object.keys(interfaces)) {
+      const lowerName = name.toLowerCase();
+      // Skip known virtual / loopback / tunnel adapters
+      if (
+        lowerName.includes('loopback') ||
+        lowerName.includes('vethernet') ||
+        lowerName.includes('virtualbox') ||
+        lowerName.includes('vmware') ||
+        lowerName.includes('wsl') ||
+        lowerName.includes('bluetooth') ||
+        lowerName.includes('teredo') ||
+        lowerName.includes('tailscale') ||
+        lowerName.includes('zerotier')
+      ) {
+        continue;
+      }
+
       for (const net of interfaces[name] || []) {
         if (net.family === 'IPv4' && !net.internal) {
-          this.localIp = net.address;
-          return;
+          // Reject link-local APIPA addresses (169.254.x.x)
+          if (net.address.startsWith('169.254.')) {
+            continue;
+          }
+
+          let score = 10;
+          if (lowerName.includes('wi-fi') || lowerName.includes('wifi') || lowerName.includes('wireless') || lowerName.includes('wlan')) {
+            score += 100;
+          } else if (lowerName.includes('ethernet')) {
+            score += 50;
+          }
+
+          // Prefer standard LAN subnets
+          if (net.address.startsWith('192.168.') || net.address.startsWith('10.')) {
+            score += 30;
+          }
+
+          candidates.push({ ip: net.address, name, score });
         }
       }
+    }
+
+    // Sort by score descending
+    candidates.sort((a, b) => b.score - a.score);
+
+    if (candidates.length > 0) {
+      this.localIp = candidates[0].ip;
+      console.log(`Flik selected primary IP: ${this.localIp} (${candidates[0].name})`);
+    } else {
+      // Fallback
+      this.localIp = '127.0.0.1';
     }
   }
 

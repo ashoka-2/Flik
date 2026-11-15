@@ -155,9 +155,24 @@ export const TrayWindow: React.FC = () => {
         <p className="qr-instruction">
           Scan with Flik on your Android phone to pair instantly on local Wi-Fi.
         </p>
-        <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-          {info ? `${info.ip}:${info.port}` : 'Detecting network...'}
-        </span>
+        <div style={{
+          marginTop: 8,
+          padding: '6px 12px',
+          borderRadius: 8,
+          background: 'var(--raised)',
+          border: '1px solid var(--line)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Wi-Fi Direct / Local IP
+          </span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', letterSpacing: 0.5 }}>
+            {info ? `${info.ip}:${info.port}` : 'Detecting network...'}
+          </span>
+        </div>
       </div>
 
       <div className="tray-controls">

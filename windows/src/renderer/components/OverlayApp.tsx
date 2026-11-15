@@ -50,14 +50,17 @@ export const OverlayApp: React.FC = () => {
   useEffect(() => {
     // Listen for incoming transfer cards
     const unsubTransfer = window.flik?.onTransferReceived((newCard: ActiveTransferCard) => {
-      // Calculate screen landing position from trajectoryX (-1.0 to 1.0 or 0.0 to 1.0)
+      // Calculate screen landing position from trajectoryX (-1.0 to 1.0)
       const traj = typeof newCard.trajectoryX === 'number' ? newCard.trajectoryX : 0;
-      const normalizedTraj = traj >= -1 && traj <= 1 ? traj : 0;
-      const targetX = Math.max(
-        40,
-        Math.min(window.innerWidth - 320, window.innerWidth * 0.5 + normalizedTraj * (window.innerWidth * 0.35) - 140)
-      );
-      const targetY = Math.max(80, window.innerHeight * 0.45);
+      const normalizedTraj = Math.max(-1, Math.min(1, traj));
+      const cardWidth = 300;
+      const screenW = window.innerWidth || window.screen.width || 1920;
+      const screenH = window.innerHeight || window.screen.height || 1080;
+
+      // Position across screen: -1 is left, 0 is center, +1 is right
+      const rawX = (screenW / 2) + (normalizedTraj * (screenW * 0.40)) - (cardWidth / 2);
+      const targetX = Math.round(Math.max(30, Math.min(screenW - cardWidth - 30, rawX)));
+      const targetY = Math.round(Math.max(100, screenH * 0.38));
 
       const placedCard = {
         ...newCard,

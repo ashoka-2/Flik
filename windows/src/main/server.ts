@@ -203,9 +203,13 @@ export class FlikReceiverServer extends EventEmitter {
       let meta: TransferMeta | null = null;
       const savedItems: { name: string; size: number; mime: string; kind: any; localPath: string }[] = [];
       const partialFiles: string[] = [];
+      const pendingWrites: Promise<void>[] = [];
       let fileIndex = 0;
       let transferDir = '';
       let watchdogTimer: NodeJS.Timeout | null = null;
+
+      res.on('finish', () => this.resetReceivingState());
+      res.on('close', () => this.resetReceivingState());
 
       // Resets the 10-second inactivity watchdog on streaming packets
       const resetWatchdog = () => {
@@ -283,34 +287,53 @@ export class FlikReceiverServer extends EventEmitter {
 
           fileStream.on('data', () => resetWatchdog());
 
-          fileStream.pipe(writeStream);
-
-          writeStream.on('finish', () => {
-            resetWatchdog();
-            try {
-              if (fs.existsSync(partPath)) {
-                fs.renameSync(partPath, finalPath);
-                savedItems.push({
-                  name: safeName,
-                  size: currentItem.size,
-                  mime: currentItem.mime || info.mimeType,
-                  kind: currentItem.kind || 'file',
-                  localPath: finalPath,
-                });
+          const writePromise = new Promise<void>((resolve, reject) => {
+            writeStream.on('finish', () => {
+              resetWatchdog();
+              try {
+                if (fs.existsSync(partPath)) {
+                  fs.renameSync(partPath, finalPath);
+                  savedItems.push({
+                    name: safeName,
+                    size: currentItem.size,
+                    mime: currentItem.mime || info.mimeType,
+                    kind: currentItem.kind || 'file',
+                    localPath: finalPath,
+                  });
+                }
+                resolve();
+              } catch (err) {
+                console.error('Error renaming finished .part file:', err);
+                reject(err);
               }
-            } catch (err) {
-              console.error('Error renaming finished .part file:', err);
-            }
+            });
+            writeStream.on('error', (err) => {
+              console.error('WriteStream error:', err);
+              reject(err);
+            });
+            fileStream.on('error', (err) => {
+              console.error('FileStream error:', err);
+              reject(err);
+            });
           });
+
+          pendingWrites.push(writePromise);
+          fileStream.pipe(writeStream);
         });
 
-        bb.on('close', () => {
+        bb.on('close', async () => {
           if (watchdogTimer) clearTimeout(watchdogTimer);
-          this.isReceiving = false;
-          this.activeTransferId = null;
-          this.activeStreams = [];
+
+          try {
+            await Promise.all(pendingWrites);
+          } catch (writeErr) {
+            console.error('One or more files failed to write completely:', writeErr);
+          }
+
+          this.resetReceivingState();
 
           if (meta && savedItems.length > 0) {
+            const traj = typeof meta.trajectoryX === 'number' ? meta.trajectoryX : 0;
             const card: ActiveTransferCard = {
               id: meta.transferId,
               senderName,
@@ -318,7 +341,7 @@ export class FlikReceiverServer extends EventEmitter {
               items: savedItems,
               x: 100,
               y: 100,
-              trajectoryX: meta.trajectoryX,
+              trajectoryX: traj,
               createdAt: Date.now(),
             };
             this.emit('transfer-received', card);
