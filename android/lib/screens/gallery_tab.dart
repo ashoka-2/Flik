@@ -7,7 +7,7 @@ import '../theme/tokens.dart';
 import '../widgets/flik_thumbnail_image.dart';
 import 'media_viewer_screen.dart';
 
-// High-performance gallery browser with native image caching, album filtering, lazy loading, and multi-select.
+// High-performance gallery browser with crisp thumbnails, album filtering, sorting, and multi-select.
 class GalleryTab extends ConsumerStatefulWidget {
   final void Function(List<TransferItem> items)? onStageItems;
 
@@ -22,12 +22,14 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
   AssetPathEntity? _selectedAlbum;
   List<AssetEntity> _assets = [];
   final Set<String> _selectedAssetIds = {};
-  
+
   bool _isLoading = true;
   bool _isLoadingMore = false;
   int _currentPage = 0;
-  static const int _pageSize = 60;
+  static const int _pageSize = 80;
   bool _hasMore = true;
+  bool _sortLatestFirst = true;
+  final RequestType _mediaFilter = RequestType.common;
 
   final ScrollController _scrollController = ScrollController();
 
@@ -56,12 +58,13 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     final permission = await PhotoManager.requestPermissionExtend();
     if (permission.isAuth || permission.hasAccess) {
       final albums = await PhotoManager.getAssetPathList(
-        type: RequestType.common,
+        type: _mediaFilter,
         hasAll: true,
       );
 
       if (albums.isNotEmpty) {
         _albums = albums;
+        // Always select the "All" album by default
         _selectedAlbum = albums.first;
         _currentPage = 0;
         _hasMore = true;
@@ -70,6 +73,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
           page: 0,
           size: _pageSize,
         );
+
+        _applySort(firstBatch);
 
         if (mounted) {
           setState(() {
@@ -86,6 +91,21 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     }
   }
 
+  void _applySort(List<AssetEntity> list) {
+    if (_sortLatestFirst) {
+      list.sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
+    } else {
+      list.sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
+    }
+  }
+
+  void _toggleSort() {
+    setState(() {
+      _sortLatestFirst = !_sortLatestFirst;
+      _applySort(_assets);
+    });
+  }
+
   Future<void> _switchAlbum(AssetPathEntity album) async {
     if (_selectedAlbum?.id == album.id) return;
     setState(() {
@@ -98,6 +118,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     });
 
     final items = await album.getAssetListPaged(page: 0, size: _pageSize);
+    _applySort(items);
+
     if (mounted) {
       setState(() {
         _assets = items;
@@ -116,6 +138,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
       page: nextPage,
       size: _pageSize,
     );
+
+    _applySort(newItems);
 
     if (mounted) {
       setState(() {
@@ -148,7 +172,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     for (final asset in selectedAssets) {
       final file = await asset.file;
       if (file != null) {
-        final thumb = await asset.thumbnailDataWithSize(const ThumbnailSize(200, 200));
+        final thumb = await asset.thumbnailDataWithSize(const ThumbnailSize(360, 360));
         items.add(
           TransferItem(
             id: asset.id,
@@ -195,40 +219,81 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
     return Column(
       children: [
-        // Album selector chips row
-        if (_albums.length > 1)
-          Container(
-            height: 44,
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              scrollDirection: Axis.horizontal,
-              itemCount: _albums.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                final album = _albums[index];
-                final isSelected = _selectedAlbum?.id == album.id;
+        // Controls bar: Album Selector & Sort Toggle
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
+            children: [
+              // Horizontal album chips
+              Expanded(
+                child: SizedBox(
+                  height: 38,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _albums.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, index) {
+                      final album = _albums[index];
+                      final isSelected = _selectedAlbum?.id == album.id;
+                      final displayName = album.isAll || album.name.isEmpty || album.name.toLowerCase() == 'recent'
+                          ? 'All Photos'
+                          : album.name;
 
-                return ChoiceChip(
-                  label: Text(
-                    album.name.isEmpty ? 'All' : album.name,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                      color: isSelected ? Colors.white : FlikTokens.muted,
-                    ),
+                      return ChoiceChip(
+                        label: Text(
+                          displayName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                            color: isSelected ? Colors.white : FlikTokens.muted,
+                          ),
+                        ),
+                        selected: isSelected,
+                        selectedColor: FlikTokens.accent,
+                        backgroundColor: FlikTokens.raised,
+                        side: BorderSide(
+                          color: isSelected ? FlikTokens.accent : FlikTokens.line,
+                        ),
+                        onSelected: (_) => _switchAlbum(album),
+                      );
+                    },
                   ),
-                  selected: isSelected,
-                  selectedColor: FlikTokens.accent,
-                  backgroundColor: FlikTokens.raised,
-                  side: BorderSide(
-                    color: isSelected ? FlikTokens.accent : FlikTokens.line,
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Sort order toggle button
+              InkWell(
+                onTap: _toggleSort,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: FlikTokens.raised,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: FlikTokens.line),
                   ),
-                  onSelected: (_) => _switchAlbum(album),
-                );
-              },
-            ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _sortLatestFirst ? Icons.arrow_downward : Icons.arrow_upward,
+                        size: 14,
+                        color: FlikTokens.accentSoft,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _sortLatestFirst ? 'Newest' : 'Oldest',
+                        style: const TextStyle(fontSize: 11, color: FlikTokens.text, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
+        ),
 
         // Grid of images
         Expanded(
@@ -283,7 +348,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
                             borderRadius: BorderRadius.circular(10),
                             child: FlikThumbnailImage(
                               asset: asset,
-                              size: const ThumbnailSize.square(240),
+                              size: const ThumbnailSize.square(360),
                               fit: BoxFit.cover,
                             ),
                           ),

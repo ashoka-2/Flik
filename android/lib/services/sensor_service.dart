@@ -6,8 +6,8 @@ import 'package:sensors_plus/sensors_plus.dart';
 // Provides hardware sensor integration: wrist flick gesture detection, continuous tilt, and compass heading.
 class SensorService {
   // Flick sensitivity thresholds
-  static const double flickThreshold = 16.0; // m/s^2 user acceleration
-  static const int cooldownMs = 800; // 800ms cooldown to avoid double trigger
+  static const double flickThreshold = 12.0; // Responsive flick gesture
+  static const int cooldownMs = 600; // 600ms cooldown
 
   StreamSubscription? _userAccelSub;
   StreamSubscription? _rawAccelSub;
@@ -32,7 +32,7 @@ class SensorService {
       _rawAccelSub = accelerometerEventStream().listen(
         (AccelerometerEvent event) {
           // In portrait: tilt left produces negative x, tilt right produces positive x
-          currentTiltX = (-event.x / 6.0).clamp(-1.0, 1.0);
+          currentTiltX = (-event.x / 3.5).clamp(-1.0, 1.0);
         },
         onError: (_) {},
         cancelOnError: false,
@@ -49,7 +49,7 @@ class SensorService {
           if (magnitude > flickThreshold && (now - _lastFlickTime) > cooldownMs) {
             _lastFlickTime = now;
             // Trajectory combines dynamic jerk and steady tilt
-            final dynamicX = (-event.x / 8.0);
+            final dynamicX = (-event.x / 6.0);
             final trajectory = (dynamicX + currentTiltX).clamp(-1.0, 1.0);
             onFlick(trajectory);
           }

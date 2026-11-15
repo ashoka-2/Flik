@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
@@ -10,7 +11,7 @@ import '../theme/tokens.dart';
 import '../widgets/flik_thumbnail_image.dart';
 
 // Stacked card deck media viewer matching the physical Flik experience:
-// Preview subsequent photos layered behind, flick or tap Send to launch off-screen to PC.
+// High-res rendering, physical tilt/flick trajectory, and sequential transfers.
 class MediaViewerScreen extends ConsumerStatefulWidget {
   final List<AssetEntity> assets;
   final int initialIndex;
@@ -35,6 +36,7 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
 
   SensorService? _sensorService;
   VideoPlayerController? _videoController;
+  File? _currentFile;
   bool _isSending = false;
   double _lastFlickTrajX = 0.0;
 
@@ -45,26 +47,26 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
 
     _flyController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: const Duration(milliseconds: 300),
     );
 
     _flyOffsetAnimation = Tween<Offset>(
       begin: Offset.zero,
-      end: const Offset(0.0, -1.8), // Fly straight off the top edge
+      end: const Offset(0.0, -1.8),
     ).animate(CurvedAnimation(parent: _flyController, curve: Curves.easeInCubic));
 
     _flyOpacityAnimation = Tween<double>(
       begin: 1.0,
       end: 0.0,
-    ).animate(CurvedAnimation(parent: _flyController, curve: const Interval(0.5, 1.0)));
+    ).animate(CurvedAnimation(parent: _flyController, curve: const Interval(0.4, 1.0)));
 
     _flyRotationAnimation = Tween<double>(
       begin: 0.0,
-      end: -0.08,
+      end: -0.06,
     ).animate(CurvedAnimation(parent: _flyController, curve: Curves.easeIn));
 
     _initSensors();
-    _initVideoIfNeeded();
+    _loadCurrentMedia();
   }
 
   void _initSensors() {
@@ -79,15 +81,17 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
     _sensorService?.start();
   }
 
-  Future<void> _initVideoIfNeeded() async {
+  Future<void> _loadCurrentMedia() async {
     _videoController?.dispose();
     _videoController = null;
+    _currentFile = null;
 
     if (_currentIndex < widget.assets.length) {
       final currentAsset = widget.assets[_currentIndex];
-      if (currentAsset.type == AssetType.video) {
-        final file = await currentAsset.file;
-        if (file != null && mounted) {
+      final file = await currentAsset.file;
+      if (file != null && mounted) {
+        setState(() => _currentFile = file);
+        if (currentAsset.type == AssetType.video) {
           _videoController = VideoPlayerController.file(file);
           await _videoController!.initialize();
           if (mounted) setState(() {});
@@ -109,13 +113,13 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
     setState(() => _isSending = true);
 
     final currentAsset = widget.assets[_currentIndex];
-    final file = await currentAsset.file;
+    final file = _currentFile ?? await currentAsset.file;
     if (file == null) {
       setState(() => _isSending = false);
       return;
     }
 
-    final thumb = await currentAsset.thumbnailDataWithSize(const ThumbnailSize(240, 240));
+    final thumb = await currentAsset.thumbnailDataWithSize(const ThumbnailSize(360, 360));
     final item = TransferItem(
       id: currentAsset.id,
       name: currentAsset.title ?? 'Media_${currentAsset.id}',
@@ -131,15 +135,13 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
         ? _lastFlickTrajX
         : (_sensorService?.currentTiltX ?? 0.0);
 
-    // Launch off-screen flight animation
+    // Start off-screen flight animation
     _flyController.forward();
 
-    // Send item to connected PC
+    // Send item to connected PC and await completion
     final notifier = ref.read(flikAppProvider.notifier);
-    notifier.sendItemsDirectly([item], trajectoryX: trajX);
+    await notifier.sendItemsDirectly([item], trajectoryX: trajX);
 
-    // Advance to next photo after flight finishes
-    await Future.delayed(const Duration(milliseconds: 280));
     if (!mounted) return;
 
     _flyController.reset();
@@ -150,7 +152,7 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
         _currentIndex++;
         _isSending = false;
       });
-      _initVideoIfNeeded();
+      _loadCurrentMedia();
     } else {
       // Reached end of deck
       Navigator.pop(context);
@@ -158,16 +160,16 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
   }
 
   void _nextPhoto() {
-    if (_currentIndex + 1 < widget.assets.length) {
+    if (_currentIndex + 1 < widget.assets.length && !_isSending) {
       setState(() => _currentIndex++);
-      _initVideoIfNeeded();
+      _loadCurrentMedia();
     }
   }
 
   void _prevPhoto() {
-    if (_currentIndex > 0) {
+    if (_currentIndex > 0 && !_isSending) {
       setState(() => _currentIndex--);
-      _initVideoIfNeeded();
+      _loadCurrentMedia();
     }
   }
 
@@ -213,14 +215,20 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
                     ),
                   ),
                   const Spacer(),
-                  const SizedBox(width: 48), // Balance leading back button
+                  const SizedBox(width: 48),
                 ],
               ),
             ),
 
-            // Card Deck Area with Swipe Detector
+            // Card Deck Area with Gesture Detector
             Expanded(
               child: GestureDetector(
+                onVerticalDragEnd: (details) {
+                  // Swipe up flick gesture
+                  if (details.primaryVelocity != null && details.primaryVelocity! < -300) {
+                    _triggerFlickSend();
+                  }
+                },
                 onHorizontalDragEnd: (details) {
                   if (details.primaryVelocity != null) {
                     if (details.primaryVelocity! < -200) {
@@ -263,7 +271,7 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
                             ),
                           ),
 
-                        // Top Card with Hero, Flight Animation and Tilt
+                        // Top Card with Hero, Flight Animation and Full Resolution
                         AnimatedBuilder(
                           animation: _flyController,
                           builder: (context, child) {
@@ -315,10 +323,16 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.arrow_upward, size: 20),
+                        _isSending
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.arrow_upward, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          _isSending ? 'Sending...' : 'Send',
+                          _isSending ? 'Sending to PC...' : 'Send',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
@@ -362,6 +376,54 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
   Widget _buildCard(AssetEntity asset, double height, {bool isTop = false}) {
     final width = MediaQuery.of(context).size.width * 0.85;
 
+    Widget mediaContent;
+    if (isTop && asset.type == AssetType.video && _videoController != null) {
+      mediaContent = Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.center,
+        children: [
+          Center(
+            child: AspectRatio(
+              aspectRatio: _videoController!.value.aspectRatio,
+              child: VideoPlayer(_videoController!),
+            ),
+          ),
+          IconButton(
+            iconSize: 56,
+            icon: Icon(
+              _videoController!.value.isPlaying ? Icons.pause_circle : Icons.play_circle,
+              color: Colors.white,
+            ),
+            onPressed: () {
+              setState(() {
+                _videoController!.value.isPlaying
+                    ? _videoController!.pause()
+                    : _videoController!.play();
+              });
+            },
+          ),
+        ],
+      );
+    } else if (isTop && _currentFile != null) {
+      // 100% full original resolution image
+      mediaContent = Image.file(
+        _currentFile!,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => FlikThumbnailImage(
+          asset: asset,
+          size: const ThumbnailSize.square(400),
+          fit: BoxFit.cover,
+        ),
+      );
+    } else {
+      // Crisp preview for background cards
+      mediaContent = FlikThumbnailImage(
+        asset: asset,
+        size: const ThumbnailSize.square(400),
+        fit: BoxFit.cover,
+      );
+    }
+
     return Container(
       width: width,
       height: height,
@@ -382,38 +444,7 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: isTop && asset.type == AssetType.video && _videoController != null
-            ? Stack(
-                fit: StackFit.expand,
-                alignment: Alignment.center,
-                children: [
-                  Center(
-                    child: AspectRatio(
-                      aspectRatio: _videoController!.value.aspectRatio,
-                      child: VideoPlayer(_videoController!),
-                    ),
-                  ),
-                  IconButton(
-                    iconSize: 56,
-                    icon: Icon(
-                      _videoController!.value.isPlaying ? Icons.pause_circle : Icons.play_circle,
-                      color: Colors.white,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _videoController!.value.isPlaying
-                            ? _videoController!.pause()
-                            : _videoController!.play();
-                      });
-                    },
-                  ),
-                ],
-              )
-            : FlikThumbnailImage(
-                asset: asset,
-                size: const ThumbnailSize(900, 1200),
-                fit: BoxFit.cover,
-              ),
+        child: mediaContent,
       ),
     );
   }

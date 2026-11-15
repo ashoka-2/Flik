@@ -12,7 +12,7 @@ class FlikThumbnailImage extends StatefulWidget {
   const FlikThumbnailImage({
     super.key,
     required this.asset,
-    this.size = const ThumbnailSize.square(240),
+    this.size = const ThumbnailSize.square(360),
     this.fit = BoxFit.cover,
   });
 
