@@ -11,6 +11,7 @@ import 'links_tab.dart';
 import 'library_tab.dart';
 import 'add_device_dialog.dart';
 import 'qr_scanner_screen.dart';
+import 'receive_screen.dart';
 
 // Main Flik mobile screen hosting spatial radar, tactile staged deck, tabs, and error toasts.
 class MainScreen extends ConsumerStatefulWidget {
@@ -50,26 +51,39 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                             ),
                           ),
                           const Spacer(),
-                          // Receive Mode Toggle Button
-                          OutlinedButton.icon(
-                            onPressed: () => notifier.toggleReceiveMode(),
+                          // Receive Screen Button
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const ReceiveScreen()),
+                              );
+                            },
                             icon: Icon(
-                              state.isReceiveMode ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                              size: 16,
-                              color: state.isReceiveMode ? Colors.greenAccent : FlikTokens.muted,
+                              state.isReceiveMode ? Icons.wifi_tethering : Icons.arrow_downward,
+                              size: 15,
+                              color: state.isReceiveMode ? Colors.greenAccent : Colors.white,
                             ),
                             label: Text(
-                              state.isReceiveMode ? 'Receive ON' : 'Receive Mode',
+                              state.isReceiveMode ? 'Receiving...' : 'Receive',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: state.isReceiveMode ? Colors.greenAccent : FlikTokens.text,
+                                fontWeight: FontWeight.w600,
+                                color: state.isReceiveMode ? Colors.greenAccent : Colors.white,
                               ),
                             ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: state.isReceiveMode
+                                  ? Colors.greenAccent.withOpacity(0.15)
+                                  : FlikTokens.surface,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               minimumSize: const Size(60, 36),
                               side: BorderSide(
                                 color: state.isReceiveMode ? Colors.greenAccent : FlikTokens.line,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(FlikTokens.radiusPill),
                               ),
                             ),
                           ),

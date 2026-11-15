@@ -1,14 +1,18 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:gal/gal.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:shelf_multipart/shelf_multipart.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../models/transfer_meta.dart';
 import '../models/history_entry.dart';
 import 'connection_pool_service.dart';
+import 'media_store_service.dart';
 import 'storage_service.dart';
 
 // Flik receiver HTTP server implemented in Shelf matching the protocol rules.
@@ -133,7 +137,7 @@ class FlikHttpServer {
 
       void resetWatchdog() {
         watchdog?.cancel();
-        watchdog = Timer(const Duration(seconds: 10), () {
+        watchdog = Timer(const Duration(seconds: 15), () {
           _cleanupPartials();
           _isReceiving = false;
         });
@@ -141,39 +145,81 @@ class FlikHttpServer {
 
       try {
         resetWatchdog();
-        final bytes = await req.read().expand((chunk) {
-          resetWatchdog();
-          return chunk;
-        }).toList();
+        final formDataReq = req.formData();
+        final tempDir = await Directory.systemTemp.createTemp('flik_rx_');
+        TransferMeta? meta;
+        final savedFiles = <String>[];
+        int totalBytes = 0;
+
+        if (formDataReq != null) {
+          await for (final formField in formDataReq.formData) {
+            resetWatchdog();
+            final bytes = await formField.part.fold<List<int>>([], (acc, chunk) => acc..addAll(chunk));
+            totalBytes += bytes.length;
+
+            if (formField.name == 'meta') {
+              try {
+                final jsonStr = utf8.decode(bytes);
+                meta = TransferMeta.fromJson(jsonDecode(jsonStr) as Map<String, dynamic>);
+              } catch (_) {}
+            } else {
+              final rawName = formField.filename ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
+              final safeName = rawName.replaceAll(RegExp(r'[^\w\.\-\s]'), '_');
+              final tempFile = File('${tempDir.path}/$safeName');
+              await tempFile.writeAsBytes(bytes);
+              _partialFiles.add(tempFile);
+              savedFiles.add(safeName);
+
+              // Save to Android Gallery if image or video
+              final lower = safeName.toLowerCase();
+              try {
+                if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+                  await Gal.putImage(tempFile.path, album: 'Flik');
+                } else if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.mkv')) {
+                  await Gal.putVideo(tempFile.path, album: 'Flik');
+                }
+              } catch (_) {}
+
+              // Save to Downloads/Flik
+              try {
+                await MediaStoreService.saveToDownloads(
+                  fileName: safeName,
+                  bytes: Uint8List.fromList(bytes),
+                );
+              } catch (_) {}
+            }
+          }
+        }
 
         watchdog?.cancel();
         _isReceiving = false;
 
-        // Process received bytes (simplified multipart parsing)
-        final tempDir = await Directory.systemTemp.createTemp('flik_rx_');
-        final dummyFile = File('${tempDir.path}/received_file');
-        await dummyFile.writeAsBytes(bytes);
-
         // Record history
+        final senderName = meta?.items.firstOrNull?.name ?? (savedFiles.isNotEmpty ? savedFiles.first : 'Received Files');
         await storage.addHistoryEntry(
           TransferHistoryEntry(
-            id: const Uuid().v4(),
-            deviceName: 'Sender',
+            id: meta?.transferId ?? const Uuid().v4(),
+            deviceName: 'Phone Peer',
             isOutbound: false,
-            itemsCount: 1,
-            totalBytes: bytes.length,
+            itemsCount: savedFiles.length,
+            totalBytes: totalBytes,
             timestamp: DateTime.now(),
-            summaryName: 'Received Transfer',
+            summaryName: senderName,
             status: 'completed',
           ),
         );
+
+        onToast('Received ${savedFiles.length} file(s) into Gallery/Downloads');
+        if (meta != null) {
+          onTransferCompleted(meta);
+        }
 
         return Response.ok(jsonEncode({'status': 'completed'}));
       } catch (e) {
         watchdog?.cancel();
         _cleanupPartials();
         _isReceiving = false;
-        return Response.internalServerError(body: jsonEncode({'error': 'Receive failed'}));
+        return Response.internalServerError(body: jsonEncode({'error': 'Receive failed: $e'}));
       }
     });
 

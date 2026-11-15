@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:bonsoir/bonsoir.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/peer.dart';
 import '../models/transfer_item.dart';
@@ -67,6 +68,7 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
   late final FlikHttpClient client;
   FlikHttpServer? server;
   SensorService? sensorService;
+  BonsoirBroadcast? _broadcast;
   StreamSubscription? _peersSub;
   Timer? _toastTimer;
 
@@ -149,8 +151,32 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
         onUrlReceived: (title, url) => showToast('Opened $title'),
         onTransferCompleted: (meta) => showToast('Received transfer'),
       );
-      await server?.start();
+      final boundPort = await server?.start();
+
+      // Broadcast presence on local Wi-Fi / Hotspot via mDNS
+      try {
+        if (boundPort != null) {
+          final service = BonsoirService(
+            name: storage.getDeviceName(),
+            type: '_flik._tcp',
+            port: boundPort,
+            attributes: {
+              'deviceId': storage.getDeviceId(),
+              'deviceName': storage.getDeviceName(),
+              'platform': 'android',
+              'ver': '1',
+            },
+          );
+          _broadcast = BonsoirBroadcast(service: service);
+          await _broadcast!.ready;
+          await _broadcast!.start();
+        }
+      } catch (_) {}
     } else {
+      try {
+        await _broadcast?.stop();
+      } catch (_) {}
+      _broadcast = null;
       await server?.stop();
       server = null;
       await ForegroundReceiverService.stop();
