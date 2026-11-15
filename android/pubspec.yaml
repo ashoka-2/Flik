@@ -1,0 +1,48 @@
+name: flik
+description: "Local-network file and link transfer system between Android and Windows."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Network Discovery & HTTP Server/Client
+  bonsoir: ^5.0.0
+  shelf: ^1.4.1
+  shelf_router: ^1.1.4
+  dio: ^5.4.3+1
+  crypto: ^3.0.3
+  uuid: ^4.4.0
+
+  # Files & Media
+  photo_manager: ^3.0.0
+  video_player: ^2.8.5
+  file_picker: ^8.0.0+1
+  gal: ^2.3.0
+  share_handler: ^0.0.19
+
+  # Sensors & Spatial
+  sensors_plus: ^5.0.1
+  flutter_compass: ^0.8.0
+
+  # System, Permissions & Background Receive
+  flutter_foreground_task: ^6.1.1
+  permission_handler: ^11.3.1
+  url_launcher: ^6.2.6
+  shared_preferences: ^2.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
