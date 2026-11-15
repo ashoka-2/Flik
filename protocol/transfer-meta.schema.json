@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flik.local/protocol/transfer-meta.schema.json",
+  "title": "Flik transfer metadata",
+  "type": "object",
+  "required": ["transferId", "items"],
+  "properties": {
+    "transferId": {"type": "string", "minLength": 1},
+    "items": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["name", "size", "mime", "kind"], "properties": {"name": {"type": "string"}, "size": {"type": "integer", "minimum": 0}, "mime": {"type": "string"}, "kind": {"enum": ["file", "image", "video"]}}}},
+    "trajectoryX": {"type": "number"}
+  },
+  "additionalProperties": false
+}

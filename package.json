@@ -1,0 +1,10 @@
+{
+  "name": "flik",
+  "version": "0.1.0",
+  "description": "Private local-network file and link transfer for Android and Windows",
+  "private": true,
+  "workspaces": ["windows"],
+  "scripts": {
+    "verify:protocol": "node tools/verify-protocol.mjs"
+  }
+}

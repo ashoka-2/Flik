@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Flik UI design tokens",
+  "description": "Shared minimal-ai-ui tokens. Keep both platform themes aligned to these values.",
+  "type": "object",
+  "properties": {
+    "color": {
+      "type": "object",
+      "properties": {
+        "dark": {"type": "object", "properties": {"background": {"const": "#151515"}, "surface": {"const": "#20201E"}, "raised": {"const": "#303030"}, "text": {"const": "#F9F9F7"}, "muted": {"const": "#A0A09E"}, "line": {"const": "rgba(255,255,255,0.12)"}, "accent": {"const": "#3566EF"}, "accentText": {"const": "#8AABF8"}}},
+        "light": {"type": "object", "properties": {"background": {"const": "#FCFCFC"}, "surface": {"const": "#E8E8E8"}, "raised": {"const": "#FFFFFF"}, "text": {"const": "#0D0D0D"}, "muted": {"const": "#5D5D5D"}, "line": {"const": "rgba(0,0,0,0.10)"}, "accent": {"const": "#2D51BF"}, "accentText": {"const": "#2D51BF"}}}
+      }
+    },
+    "spacingDp": {"type": "object", "properties": {"screen": {"const": 16}, "tablet": {"const": 24}, "desktop": {"const": 40}, "rowGap": {"const": 2}, "unit": {"const": 8}}},
+    "radiusDp": {"type": "object", "properties": {"group": {"const": 28}, "inner": {"const": 6}, "pill": {"const": 999}, "sheetTop": {"const": 28}}},
+    "motionMs": {"type": "object", "properties": {"fast": {"const": 120}, "base": {"const": 200}, "slow": {"const": 320}}}
+  },
+  "required": ["color", "spacingDp", "radiusDp", "motionMs"]
+}
