@@ -1,0 +1,18 @@
+{
+  "transferId": "xfer-7b8c9d0e-1a2b",
+  "items": [
+    {
+      "name": "vacation-sunset.jpg",
+      "size": 3145728,
+      "mime": "image/jpeg",
+      "kind": "image"
+    },
+    {
+      "name": "notes.pdf",
+      "size": 524288,
+      "mime": "application/pdf",
+      "kind": "file"
+    }
+  ],
+  "trajectoryX": 0.35
+}

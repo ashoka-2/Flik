@@ -16,5 +16,7 @@ android/.gradle/
 windows/node_modules/
 windows/release/
 windows/dist/
+Flik desktop/
+.agents/
 .DS_Store
 Thumbs.db

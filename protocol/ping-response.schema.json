@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flik.local/protocol/ping-response.schema.json",
+  "title": "Flik Ping Response",
+  "type": "object",
+  "required": ["deviceId", "deviceName", "platform", "ver", "freeBytes", "busy"],
+  "properties": {
+    "deviceId": { "type": "string" },
+    "deviceName": { "type": "string" },
+    "platform": { "enum": ["android", "windows"] },
+    "ver": { "type": "integer", "minimum": 1 },
+    "freeBytes": { "type": "integer", "minimum": 0 },
+    "busy": { "type": "boolean" }
+  },
+  "additionalProperties": false
+}

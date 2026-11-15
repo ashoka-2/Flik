@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flik.local/protocol/url-transfer.schema.json",
+  "title": "Flik URL Transfer",
+  "type": "object",
+  "required": ["transferId", "url"],
+  "properties": {
+    "transferId": { "type": "string", "minLength": 1 },
+    "url": { "type": "string", "maxLength": 2048 },
+    "title": { "type": "string" }
+  },
+  "additionalProperties": false
+}
