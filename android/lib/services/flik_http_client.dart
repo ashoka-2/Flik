@@ -55,7 +55,7 @@ class FlikHttpClient {
       }
 
       final freeBytes = (pingData['freeBytes'] as num?)?.toInt() ?? 0;
-      final totalSize = items.reduce((acc, it) => acc + it.size).size;
+      final totalSize = items.fold<int>(0, (acc, it) => acc + it.size);
       if (freeBytes > 0 && freeBytes < totalSize + (50 * 1024 * 1024)) {
         onError('Not enough storage space on ${peer.deviceName} to save this file.');
         return false;

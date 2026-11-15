@@ -36,6 +36,7 @@ dependencies:
   # System, Permissions & Background Receive
   flutter_foreground_task: ^6.1.1
   permission_handler: ^11.3.1
+  mobile_scanner: ^5.1.1
   url_launcher: ^6.2.6
   shared_preferences: ^2.2.3
 

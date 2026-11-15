@@ -26,10 +26,10 @@ class _LibraryTabState extends State<LibraryTab> {
   @override
   Widget build(BuildContext context) {
     if (_history.isEmpty) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
+          children: [
             Icon(Icons.history, size: 48, color: FlikTokens.muted),
             SizedBox(height: 12),
             Text('No transfers yet', style: TextStyle(color: FlikTokens.muted, fontSize: 14)),
@@ -59,7 +59,7 @@ class _LibraryTabState extends State<LibraryTab> {
               Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: FlikTokens.raised,
                   shape: BoxShape.circle,
                 ),

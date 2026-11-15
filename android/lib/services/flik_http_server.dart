@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:gal/gal.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
@@ -10,7 +9,6 @@ import 'package:uuid/uuid.dart';
 import '../models/transfer_meta.dart';
 import '../models/history_entry.dart';
 import 'connection_pool_service.dart';
-import 'media_store_service.dart';
 import 'storage_service.dart';
 
 // Flik receiver HTTP server implemented in Shelf matching the protocol rules.
@@ -46,14 +44,6 @@ class FlikHttpServer {
       result |= a.codeUnitAt(i) ^ b.codeUnitAt(i);
     }
     return result == 0;
-  }
-
-  // Sanitizes incoming filenames
-  String _sanitize(String name) {
-    var clean = name.replaceAll(RegExp(r'[/\\]'), '_').replaceAll(RegExp(r'[\x00-\x1F]'), '').trim();
-    if (clean.isEmpty) clean = 'flik_file_${DateTime.now().millisecondsSinceEpoch}';
-    if (clean.length > 128) clean = clean.substring(clean.length - 128);
-    return clean;
   }
 
   Router _createRouter() {
@@ -246,7 +236,7 @@ class FlikHttpServer {
   // Starts server sequentially testing ports 54321 to 54330
   Future<int> start() async {
     final router = _createRouter();
-    final handler = const Pipeline().addMiddleware(logRequests()).addHandler(router);
+    final handler = const Pipeline().addMiddleware(logRequests()).addHandler(router.call);
 
     for (int port = 54321; port <= 54330; port++) {
       try {

@@ -1,48 +1,130 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../models/transfer_item.dart';
+import '../providers/flik_state.dart';
 import '../theme/tokens.dart';
+import '../widgets/flik_thumbnail_image.dart';
 import 'media_viewer_screen.dart';
 
-// Gallery browser tab with multi-select, duration badges, and "Flick Selected" action.
-class GalleryTab extends StatefulWidget {
-  final void Function(List<TransferItem> items) onStageItems;
+// High-performance gallery browser with native image caching, album filtering, lazy loading, and multi-select.
+class GalleryTab extends ConsumerStatefulWidget {
+  final void Function(List<TransferItem> items)? onStageItems;
 
-  const GalleryTab({super.key, required this.onStageItems});
+  const GalleryTab({super.key, this.onStageItems});
 
   @override
-  State<GalleryTab> createState() => _GalleryTabState();
+  ConsumerState<GalleryTab> createState() => _GalleryTabState();
 }
 
-class _GalleryTabState extends State<GalleryTab> {
+class _GalleryTabState extends ConsumerState<GalleryTab> {
+  List<AssetPathEntity> _albums = [];
+  AssetPathEntity? _selectedAlbum;
   List<AssetEntity> _assets = [];
   final Set<String> _selectedAssetIds = {};
+  
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  int _currentPage = 0;
+  static const int _pageSize = 60;
+  bool _hasMore = true;
+
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
-    _loadMedia();
+    _scrollController.addListener(_onScroll);
+    _loadAlbums();
   }
 
-  Future<void> _loadMedia() async {
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400) {
+      _loadMoreAssets();
+    }
+  }
+
+  Future<void> _loadAlbums() async {
+    setState(() => _isLoading = true);
     final permission = await PhotoManager.requestPermissionExtend();
     if (permission.isAuth || permission.hasAccess) {
       final albums = await PhotoManager.getAssetPathList(
         type: RequestType.common,
-        onlyAll: true,
+        hasAll: true,
       );
+
       if (albums.isNotEmpty) {
-        final recentAlbum = albums.first;
-        final list = await recentAlbum.getAssetListPaged(page: 0, size: 80);
-        setState(() {
-          _assets = list;
-          _isLoading = false;
-        });
+        _albums = albums;
+        _selectedAlbum = albums.first;
+        _currentPage = 0;
+        _hasMore = true;
+
+        final firstBatch = await _selectedAlbum!.getAssetListPaged(
+          page: 0,
+          size: _pageSize,
+        );
+
+        if (mounted) {
+          setState(() {
+            _assets = firstBatch;
+            _isLoading = false;
+            _hasMore = firstBatch.length >= _pageSize;
+          });
+        }
         return;
       }
     }
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _switchAlbum(AssetPathEntity album) async {
+    if (_selectedAlbum?.id == album.id) return;
+    setState(() {
+      _selectedAlbum = album;
+      _isLoading = true;
+      _assets = [];
+      _currentPage = 0;
+      _hasMore = true;
+      _selectedAssetIds.clear();
+    });
+
+    final items = await album.getAssetListPaged(page: 0, size: _pageSize);
+    if (mounted) {
+      setState(() {
+        _assets = items;
+        _isLoading = false;
+        _hasMore = items.length >= _pageSize;
+      });
+    }
+  }
+
+  Future<void> _loadMoreAssets() async {
+    if (_isLoadingMore || !_hasMore || _selectedAlbum == null) return;
+    _isLoadingMore = true;
+
+    final nextPage = _currentPage + 1;
+    final newItems = await _selectedAlbum!.getAssetListPaged(
+      page: nextPage,
+      size: _pageSize,
+    );
+
+    if (mounted) {
+      setState(() {
+        _currentPage = nextPage;
+        _assets.addAll(newItems);
+        _hasMore = newItems.length >= _pageSize;
+        _isLoadingMore = false;
+      });
+    }
   }
 
   void _toggleSelection(AssetEntity asset) {
@@ -55,8 +137,12 @@ class _GalleryTabState extends State<GalleryTab> {
     });
   }
 
-  Future<void> _stageSelected() async {
+  Future<void> _sendSelectedDirectly() async {
+    final notifier = ref.read(flikAppProvider.notifier);
     final selectedAssets = _assets.where((a) => _selectedAssetIds.contains(a.id)).toList();
+    if (selectedAssets.isEmpty) return;
+
+    notifier.showToast('Preparing ${selectedAssets.length} file(s)...');
     final items = <TransferItem>[];
 
     for (final asset in selectedAssets) {
@@ -78,15 +164,15 @@ class _GalleryTabState extends State<GalleryTab> {
     }
 
     if (items.isNotEmpty) {
-      widget.onStageItems(items);
       setState(() => _selectedAssetIds.clear());
+      await notifier.sendItemsDirectly(items);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator(color: FlikTokens.accentSoft));
     }
 
     if (_assets.isEmpty) {
@@ -97,116 +183,187 @@ class _GalleryTabState extends State<GalleryTab> {
             const Icon(Icons.photo_library_outlined, size: 48, color: FlikTokens.muted),
             const SizedBox(height: 12),
             const Text('No photos or videos found', style: TextStyle(color: FlikTokens.muted)),
-            const SizedBox(height: 8),
-            ElevatedButton(onPressed: _loadMedia, child: const Text('Grant Access')),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _loadAlbums,
+              child: const Text('Refresh / Permissions'),
+            ),
           ],
         ),
       );
     }
 
-    return Stack(
+    return Column(
       children: [
-        GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-          ),
-          itemCount: _assets.length,
-          itemBuilder: (context, index) {
-            final asset = _assets[index];
-            final isSelected = _selectedAssetIds.contains(asset.id);
+        // Album selector chips row
+        if (_albums.length > 1)
+          Container(
+            height: 44,
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              scrollDirection: Axis.horizontal,
+              itemCount: _albums.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final album = _albums[index];
+                final isSelected = _selectedAlbum?.id == album.id;
 
-            return GestureDetector(
-              onTap: () {
-                if (_selectedAssetIds.isNotEmpty) {
-                  _toggleSelection(asset);
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MediaViewerScreen(
-                        asset: asset,
-                        onStage: (item) => widget.onStageItems([item]),
+                return ChoiceChip(
+                  label: Text(
+                    album.name.isEmpty ? 'All' : album.name,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      color: isSelected ? Colors.white : FlikTokens.muted,
+                    ),
+                  ),
+                  selected: isSelected,
+                  selectedColor: FlikTokens.accent,
+                  backgroundColor: FlikTokens.raised,
+                  side: BorderSide(
+                    color: isSelected ? FlikTokens.accent : FlikTokens.line,
+                  ),
+                  onSelected: (_) => _switchAlbum(album),
+                );
+              },
+            ),
+          ),
+
+        // Grid of images
+        Expanded(
+          child: Stack(
+            children: [
+              GridView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(8),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
+                ),
+                itemCount: _assets.length + (_hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index >= _assets.length) {
+                    return const Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  }
+
+                  final asset = _assets[index];
+                  final isSelected = _selectedAssetIds.contains(asset.id);
+
+                  return GestureDetector(
+                    onTap: () {
+                      if (_selectedAssetIds.isNotEmpty) {
+                        _toggleSelection(asset);
+                      } else {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MediaViewerScreen(
+                              assets: _assets,
+                              initialIndex: index,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    onLongPress: () => _toggleSelection(asset),
+                    child: Hero(
+                      tag: 'media_${asset.id}',
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: FlikThumbnailImage(
+                              asset: asset,
+                              size: const ThumbnailSize.square(240),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+
+                          // Video duration badge
+                          if (asset.type == AssetType.video)
+                            Positioned(
+                              bottom: 4,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.7),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.play_arrow, size: 10, color: Colors.white),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      _formatDuration(asset.duration),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                          // Selection checkbox indicator
+                          Positioned(
+                            top: 4,
+                            right: 4,
+                            child: Container(
+                              width: 22,
+                              height: 22,
+                              decoration: BoxDecoration(
+                                color: isSelected ? FlikTokens.accent : Colors.black.withOpacity(0.4),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              child: isSelected
+                                  ? const Icon(Icons.check, size: 14, color: Colors.white)
+                                  : null,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
-                }
-              },
-              onLongPress: () => _toggleSelection(asset),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: FutureBuilder(
-                      future: asset.thumbnailDataWithSize(const ThumbnailSize(240, 240)),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasData && snapshot.data != null) {
-                          return Image.memory(snapshot.data!, fit: BoxFit.cover);
-                        }
-                        return Container(color: FlikTokens.raised);
-                      },
-                    ),
-                  ),
+                },
+              ),
 
-                  // Duration badge for video
-                  if (asset.type == AssetType.video)
-                    Positioned(
-                      bottom: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(FlikTokens.radiusPill),
-                        ),
-                        child: Text(
-                          _formatDuration(asset.duration),
-                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
-                        ),
+              // Bottom Send Selected Button
+              if (_selectedAssetIds.isNotEmpty)
+                Positioned(
+                  bottom: 16,
+                  left: 24,
+                  right: 24,
+                  child: ElevatedButton.icon(
+                    onPressed: _sendSelectedDirectly,
+                    icon: const Icon(Icons.arrow_upward, size: 18),
+                    label: Text('Send Selected (${_selectedAssetIds.length})'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: FlikTokens.accent,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(FlikTokens.radiusPill),
                       ),
                     ),
-
-                  // Selection checkbox indicator
-                  Positioned(
-                    top: 6,
-                    right: 6,
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: isSelected ? FlikTokens.accent : Colors.black.withOpacity(0.4),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 1.5),
-                      ),
-                      child: isSelected
-                          ? const Icon(Icons.check, size: 14, color: Colors.white)
-                          : null,
-                    ),
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-
-        // Bottom "Flick Selected" bar
-        if (_selectedAssetIds.isNotEmpty)
-          Positioned(
-            bottom: 16,
-            left: 24,
-            right: 24,
-            child: ElevatedButton.icon(
-              onPressed: _stageSelected,
-              icon: const Icon(Icons.touch_app, size: 18),
-              label: Text('Flick Selected (${_selectedAssetIds.length})'),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(FlikTokens.buttonHeightLarge),
-              ),
-            ),
+                ),
+            ],
           ),
+        ),
       ],
     );
   }

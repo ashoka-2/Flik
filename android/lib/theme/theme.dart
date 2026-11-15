@@ -11,11 +11,9 @@ class FlikTheme {
       colorScheme: const ColorScheme.dark(
         primary: FlikTokens.accent,
         surface: FlikTokens.surface,
-        background: FlikTokens.background,
         error: FlikTokens.danger,
         onPrimary: Colors.white,
         onSurface: FlikTokens.text,
-        onBackground: FlikTokens.text,
       ),
       fontFamily: 'Roboto',
       appBarTheme: const AppBarTheme(
@@ -29,7 +27,7 @@ class FlikTheme {
         ),
         iconTheme: IconThemeData(color: FlikTokens.text),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: FlikTokens.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -66,7 +64,7 @@ class FlikTheme {
           ),
         ),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: FlikTokens.surface,
         elevation: 12,
         shape: RoundedRectangleBorder(

@@ -10,6 +10,7 @@ import 'files_tab.dart';
 import 'links_tab.dart';
 import 'library_tab.dart';
 import 'add_device_dialog.dart';
+import 'qr_scanner_screen.dart';
 
 // Main Flik mobile screen hosting spatial radar, tactile staged deck, tabs, and error toasts.
 class MainScreen extends ConsumerStatefulWidget {
@@ -73,9 +74,26 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
+                          // QR Code Scanner Button
+                          IconButton(
+                            icon: const Icon(Icons.qr_code_scanner, color: FlikTokens.accentSoft),
+                            tooltip: 'Scan PC QR',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => QrScannerScreen(
+                                    pool: notifier.connectionPool,
+                                    onToast: (msg) => notifier.showToast(msg),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                           // Manual Add Device Button
                           IconButton(
                             icon: const Icon(Icons.add_circle_outline, color: FlikTokens.text),
+                            tooltip: 'Add Device by IP',
                             onPressed: () {
                               showDialog(
                                 context: context,

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
@@ -75,10 +74,10 @@ class _FilesTabState extends State<FilesTab> {
                   child: const Icon(Icons.folder_open, color: FlikTokens.accentSoft),
                 ),
                 const SizedBox(width: 16),
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
+                    children: [
                       Text(
                         'Select Files',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: FlikTokens.text),

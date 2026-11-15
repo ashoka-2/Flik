@@ -13,6 +13,9 @@ coverage/
 *.jks
 *.keystore
 android/.gradle/
+android/android/.gradle/
+android/android/local.properties
+dummy_app/
 windows/node_modules/
 windows/release/
 windows/dist/

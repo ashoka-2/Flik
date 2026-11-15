@@ -85,7 +85,7 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
 
     // Start sensors
     sensorService = SensorService(
-      onFlick: () => triggerSend(),
+      onFlick: (trajX) => triggerSend(trajectoryX: trajX),
       onHeadingChanged: (heading) {
         state = state.copyWith(compassHeading: heading);
       },
@@ -111,7 +111,7 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
 
   void unstageItem(String id) {
     state = state.copyWith(
-      stagedItems: state.stagedItems.where((e) => e.id !== id).toList(),
+      stagedItems: state.stagedItems.where((e) => e.id != id).toList(),
     );
   }
 
@@ -164,6 +164,67 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
       cb(accept);
       state = state.copyWith(clearPairing: true);
     }
+  }
+
+  // Sends items directly without requiring prior staging
+  Future<bool> sendItemsDirectly(List<TransferItem> items, {double? trajectoryX}) async {
+    if (items.isEmpty || state.isSending) return false;
+    if (state.peers.isEmpty) {
+      showToast('No PC found nearby. Make sure devices are on the same Wi-Fi.');
+      return false;
+    }
+
+    final targetPeers = state.lockedPeerId != null
+        ? state.peers.where((p) => p.deviceId == state.lockedPeerId).toList()
+        : [state.peers.first];
+
+    if (targetPeers.isEmpty) return false;
+
+    state = state.copyWith(isSending: true, sendProgress: 0.0);
+    bool overallSuccess = false;
+
+    for (final peer in targetPeers) {
+      // Pair if not paired yet
+      if (peer.token == null && storage.getToken(peer.deviceId) == null) {
+        final paired = await connectionPool.pairWithPeer(
+          peer,
+          onCodeGenerated: (code) => showToast('Pairing with ${peer.deviceName}: code $code'),
+        );
+        if (!paired) {
+          showToast('${peer.deviceName} declined connection.');
+          state = state.copyWith(isSending: false);
+          return false;
+        }
+      }
+
+      final success = await client.sendFiles(
+        peer: peer,
+        items: items,
+        trajectoryX: trajectoryX ?? sensorService?.currentTiltX,
+        onProgress: (p) => state = state.copyWith(sendProgress: p),
+        onError: (err) => showToast(err),
+      );
+
+      if (success) {
+        overallSuccess = true;
+        showToast('Flik sent!');
+        await storage.addHistoryEntry(
+          TransferHistoryEntry(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            deviceName: peer.deviceName,
+            isOutbound: true,
+            itemsCount: items.length,
+            totalBytes: items.fold(0, (sum, i) => sum + i.size),
+            timestamp: DateTime.now(),
+            summaryName: items.first.name,
+            status: 'completed',
+          ),
+        );
+      }
+    }
+
+    state = state.copyWith(isSending: false, sendProgress: 0.0);
+    return overallSuccess;
   }
 
   Future<void> triggerSend({double? trajectoryX}) async {

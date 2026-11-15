@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 
 // Invokes native Android Kotlin channel for Scoped Storage (Downloads/Flik) and Wi-Fi Multicast Lock.

@@ -49,7 +49,7 @@ class ConnectionPoolService {
         if (event.type == BonsoirDiscoveryEventType.discoveryServiceFound) {
           event.service!.resolve(_discovery!.serviceResolver);
         } else if (event.type == BonsoirDiscoveryEventType.discoveryServiceResolved) {
-          final service = event.service as BonsoirService;
+          final service = event.service as ResolvedBonsoirService;
           final attributes = service.attributes;
           final deviceId = attributes['deviceId'];
           final myId = storage.getDeviceId();
