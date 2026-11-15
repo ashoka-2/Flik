@@ -5,6 +5,10 @@
   "private": true,
   "workspaces": ["windows"],
   "scripts": {
-    "verify:protocol": "node tools/verify-protocol.mjs"
+    "verify:protocol": "node tools/verify-protocol.mjs",
+    "test:integration": "node tools/run-integration-tests.mjs",
+    "build:windows": "npm --workspace=windows run build",
+    "package:windows": "npm --workspace=windows run package:dist",
+    "start:windows": "npm --workspace=windows run start"
   }
 }

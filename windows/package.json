@@ -2,6 +2,7 @@
   "name": "flik-connector",
   "version": "1.0.0",
   "description": "Flik Connector for Windows 10/11",
+  "author": "Flik Team",
   "main": "dist-electron/main/main.js",
   "private": true,
   "scripts": {

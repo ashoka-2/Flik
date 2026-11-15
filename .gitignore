@@ -20,4 +20,5 @@ windows/dist-electron/
 Flik desktop/
 .agents/
 .DS_Store
+.idea/
 Thumbs.db
