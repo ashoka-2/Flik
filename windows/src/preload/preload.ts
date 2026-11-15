@@ -54,6 +54,11 @@ const flikApi = {
     return await ipcRenderer.invoke('flik:get-peers');
   },
 
+  // Closes/minimizes the dashboard window to system tray
+  closeDashboard: () => {
+    ipcRenderer.send('flik:close-dashboard');
+  },
+
   // Configures Start with Windows
   setStartWithWindows: async (enable: boolean) => {
     return await ipcRenderer.invoke('flik:set-start-with-windows', enable);

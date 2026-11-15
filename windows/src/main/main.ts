@@ -36,6 +36,7 @@ class FlikConnectorApp {
   private overlayWindows: Map<number, BrowserWindow> = new Map();
   private tray: Tray | null = null;
   private trayWindow: BrowserWindow | null = null;
+  private appIcon: any = null;
   private interactiveRects: Map<number, InteractiveRect[]> = new Map();
   private cursorPollTimer: NodeJS.Timeout | null = null;
   private tempWorkspace: string;
@@ -49,6 +50,24 @@ class FlikConnectorApp {
     this.server = new FlikReceiverServer(this.store, this.tempWorkspace);
     this.mdns = new FlikMdnsService();
     this.detectLocalIp();
+    this.loadAppIcon();
+  }
+
+  // Loads or creates the Flik application icon for tray and windows
+  private loadAppIcon(): void {
+    const iconPath = path.join(__dirname, '../../build/icon.png');
+    if (fs.existsSync(iconPath)) {
+      this.appIcon = nativeImage.createFromPath(iconPath);
+    } else {
+      this.appIcon = nativeImage.createFromBuffer(
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAARnQU1BAACx' +
+          'jwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAA7SURBVFhH7c6xDQAwCMTQv3T/pZEuIAPaI0kX' +
+          '5vUq651Z78x6Z9Y7s96Z9c6sd2a9M+udWe/M+jM/k7YCyOaZ7SIAAAAASUVORK5CYII=',
+          'base64'
+        )
+      );
+    }
   }
 
   // Identifies the primary local IPv4 address for QR pairing and connections
@@ -84,6 +103,14 @@ class FlikConnectorApp {
     this.createOverlays();
     this.setupIpc();
     this.setupServerEvents();
+
+    // Show the Flik Connector Dashboard window on launch so the user sees the app
+    this.showTrayWindow();
+
+    // Bring up the dashboard when the user launches a second instance (e.g. clicks shortcut again)
+    app.on('second-instance', () => {
+      this.showTrayWindow();
+    });
 
     // Listen to screen topology changes (connecting or disconnecting monitors)
     screen.on('display-added', () => this.refreshOverlays());
@@ -189,17 +216,7 @@ class FlikConnectorApp {
 
   // System Tray initialization and menu actions
   private createTray(): void {
-    // Generate a minimal clean 16x16 icon in code if asset isn't present
-    const icon = nativeImage.createFromBuffer(
-      Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAZElEQVQ4T2NkoBAwUqifYdQAHg0M' +
-        'DAwMTEwMDJ1NDAwM/xkYGBhhmpmZGJiZGWHqmJmZ/zEwMDAyMDD8Z2BgwKcTphkugGEKBmEgGICf' +
-        '4f8Z8GmGAeDTR7ABv379YmBkyIdp+v/fAS7/AQC6GhbB41p0XwAAAABJRU5ErkJggg==',
-        'base64'
-      )
-    );
-
-    this.tray = new Tray(icon);
+    this.tray = new Tray(this.appIcon);
     this.tray.setToolTip('Flik Connector - Ready for your phone');
 
     const updateContextMenu = () => {
@@ -247,12 +264,15 @@ class FlikConnectorApp {
     }
 
     this.trayWindow = new BrowserWindow({
-      width: 380,
-      height: 480,
+      width: 420,
+      height: 560,
       resizable: false,
       frame: false,
-      alwaysOnTop: true,
-      skipTaskbar: true,
+      title: 'Flik Connector',
+      icon: this.appIcon,
+      alwaysOnTop: false,
+      skipTaskbar: false, // Visible in the Windows taskbar!
+      center: true,
       webPreferences: {
         preload: path.join(__dirname, '../preload/preload.js'),
         contextIsolation: true,
@@ -267,9 +287,13 @@ class FlikConnectorApp {
       this.trayWindow.loadFile(indexPath, { query: { mode: 'tray' } });
     }
 
-    this.trayWindow.on('blur', () => {
+    this.trayWindow.on('close', (e) => {
+      e.preventDefault();
       this.trayWindow?.hide();
     });
+
+    this.trayWindow.show();
+    this.trayWindow.focus();
   }
 
   private setupServerEvents(): void {
@@ -415,6 +439,11 @@ class FlikConnectorApp {
           if (fs.existsSync(p)) fs.unlinkSync(p);
         } catch {}
       }
+    });
+
+    // Minimizes dashboard to system tray
+    ipcMain.on('flik:close-dashboard', () => {
+      this.trayWindow?.hide();
     });
 
     // Returns local device status, IP, port, and QR data payload

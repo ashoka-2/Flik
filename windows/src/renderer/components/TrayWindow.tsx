@@ -62,11 +62,40 @@ export const TrayWindow: React.FC = () => {
   return (
     <div className="tray-shell">
       <div className="tray-header">
-        <h2 className="tray-title">Flik Connector</h2>
-        <div className="status-badge">
-          <span className="status-dot"></span>
-          Ready for phone
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: 'var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 700,
+              fontSize: 16,
+              color: '#ffffff',
+            }}
+          >
+            F
+          </div>
+          <div>
+            <h2 className="tray-title" style={{ fontSize: 18, lineHeight: 1.2 }}>Flik Connector</h2>
+            <div className="status-badge" style={{ marginTop: 2, padding: '2px 8px', fontSize: 11 }}>
+              <span className="status-dot"></span>
+              Ready for phone
+            </div>
+          </div>
         </div>
+
+        <button
+          className="btn-pill"
+          style={{ width: 32, height: 32, padding: 0, fontSize: 14 }}
+          title="Minimize to Tray"
+          onClick={() => window.flik?.closeDashboard?.()}
+        >
+          ✕
+        </button>
       </div>
 
       <div className="qr-section">
