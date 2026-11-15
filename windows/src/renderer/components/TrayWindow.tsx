@@ -13,6 +13,8 @@ export const TrayWindow: React.FC = () => {
   const [info, setInfo] = useState<DeviceInfo | null>(null);
   const [startWithWin, setStartWithWin] = useState<boolean>(false);
   const [peers, setPeers] = useState<any[]>([]);
+  const [editingName, setEditingName] = useState<boolean>(false);
+  const [deviceName, setDeviceName] = useState<string>('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -20,6 +22,9 @@ export const TrayWindow: React.FC = () => {
       if (window.flik) {
         const devInfo = await window.flik.getDeviceInfo();
         setInfo(devInfo);
+        if (devInfo) {
+          setDeviceName(devInfo.deviceName);
+        }
         const winStart = await window.flik.getStartWithWindows();
         setStartWithWin(winStart);
         const discovered = await window.flik.getPeers();
@@ -33,6 +38,14 @@ export const TrayWindow: React.FC = () => {
       if (unsubPeers) unsubPeers();
     };
   }, []);
+
+  const saveDeviceName = async () => {
+    if (!deviceName.trim()) return;
+    await window.flik?.setDeviceName(deviceName.trim());
+    setEditingName(false);
+    const updated = await window.flik?.getDeviceInfo();
+    if (updated) setInfo(updated);
+  };
 
   useEffect(() => {
     if (info && canvasRef.current) {
@@ -80,7 +93,46 @@ export const TrayWindow: React.FC = () => {
             F
           </div>
           <div>
-            <h2 className="tray-title" style={{ fontSize: 18, lineHeight: 1.2 }}>Flik Connector</h2>
+            {editingName ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={deviceName}
+                  onChange={(e) => setDeviceName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && saveDeviceName()}
+                  style={{
+                    fontSize: 14,
+                    padding: '2px 8px',
+                    borderRadius: 6,
+                    border: '1px solid var(--accent)',
+                    background: 'var(--surface)',
+                    color: 'var(--text)',
+                    width: 140,
+                  }}
+                  autoFocus
+                />
+                <button
+                  className="btn-pill primary"
+                  style={{ padding: '2px 8px', fontSize: 11 }}
+                  onClick={saveDeviceName}
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                onClick={() => setEditingName(true)}
+                title="Click to rename this PC"
+              >
+                <h2 className="tray-title" style={{ fontSize: 16, lineHeight: 1.2 }}>
+                  {deviceName || 'Flik Connector'}
+                </h2>
+                <span style={{ fontSize: 11, color: 'var(--muted)', textDecoration: 'underline' }}>
+                  edit
+                </span>
+              </div>
+            )}
             <div className="status-badge" style={{ marginTop: 2, padding: '2px 8px', fontSize: 11 }}>
               <span className="status-dot"></span>
               Ready for phone

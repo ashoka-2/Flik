@@ -88,19 +88,30 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
         </button>
       </div>
 
-      <div className="item-preview">
-        <div className="item-icon-box">{getItemIcon(firstItem?.kind || 'file')}</div>
-        <div className="item-info">
-          <span className="item-name" title={firstItem?.name}>
-            {firstItem?.name || 'Untitled File'}
-          </span>
-          <span className="item-meta">
-            {card.items.length > 1
-              ? `${card.items.length} files · ${sizeMb} MB`
-              : `${sizeMb} MB · ${firstItem?.kind || 'file'}`}
-          </span>
+      {/* If this card has an image, display full photo preview like in the video */}
+      {firstItem?.kind === 'image' ? (
+        <div className="photo-card-body">
+          <img
+            src={`flik-media://${firstItem.localPath}`}
+            alt={firstItem.name}
+            className="photo-card-img"
+          />
         </div>
-      </div>
+      ) : (
+        <div className="item-preview">
+          <div className="item-icon-box">{getItemIcon(firstItem?.kind || 'file')}</div>
+          <div className="item-info">
+            <span className="item-name" title={firstItem?.name}>
+              {firstItem?.name || 'Untitled File'}
+            </span>
+            <span className="item-meta">
+              {card.items.length > 1
+                ? `${card.items.length} files · ${sizeMb} MB`
+                : `${sizeMb} MB · ${firstItem?.kind || 'file'}`}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="card-actions">
         <button

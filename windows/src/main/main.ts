@@ -11,6 +11,8 @@ import {
   Tray,
   Menu,
   nativeImage,
+  protocol,
+  net,
 } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -21,6 +23,11 @@ import { FlikMdnsService } from './mdns';
 import { InteractiveRect, ActiveTransferCard } from '../shared/types';
 import { FLIK_CONSTANTS, NORMALIZED_ERRORS } from '../shared/constants';
 import { validateUrl } from '../shared/sanitizer';
+
+// Register custom privileged scheme for loading local media thumbnails in cards
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'flik-media', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
 
 // Enforce single instance lock
 const gotLock = app.requestSingleInstanceLock();
@@ -85,6 +92,13 @@ class FlikConnectorApp {
 
   public async init(): Promise<void> {
     await app.whenReady();
+
+    // Protocol handler to stream local image and video thumbnails to cards
+    protocol.handle('flik-media', (request) => {
+      const rawPath = request.url.replace(/^flik-media:\/\//, '');
+      const filePath = decodeURIComponent(rawPath);
+      return net.fetch(`file:///${filePath.replace(/\\/g, '/')}`);
+    });
 
     try {
       this.boundPort = await this.server.start();
@@ -460,6 +474,11 @@ class FlikConnectorApp {
           deviceName: this.store.getDeviceName(),
         }),
       };
+    });
+
+    ipcMain.handle('flik:set-device-name', (_event, name: string) => {
+      this.store.setDeviceName(name);
+      return true;
     });
 
     ipcMain.handle('flik:get-peers', () => {

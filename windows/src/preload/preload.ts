@@ -39,6 +39,11 @@ const flikApi = {
     ipcRenderer.send('flik:delete-files', filePaths);
   },
 
+  // Sets human-readable device name
+  setDeviceName: async (name: string) => {
+    return await ipcRenderer.invoke('flik:set-device-name', name);
+  },
+
   // Prompts file picker to send files to an Android phone
   promptSendFiles: async (peerDeviceId: string): Promise<boolean> => {
     return await ipcRenderer.invoke('flik:prompt-send-files', peerDeviceId);

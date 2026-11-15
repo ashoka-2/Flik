@@ -1,4 +1,4 @@
-// Generates a clean 64x64 RGBA PNG icon for Flik Connector.
+// Generates clean Flik brand icons for Windows and Android launcher mipmaps.
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
@@ -68,31 +68,48 @@ for (let i = 0; i < 256; i++) {
   table[i] = c;
 }
 
-// Draw Flik icon: blue circle with bold white "F" (256x256)
-const size = 256;
-const pngBuf = createPng(size, size, (x, y) => {
-  const dx = x - size / 2;
-  const dy = y - size / 2;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+function generateFlikIcon(size) {
+  return createPng(size, size, (x, y) => {
+    const dx = x - size / 2;
+    const dy = y - size / 2;
+    const dist = Math.sqrt(dx * dx + dy * dy);
 
-  // Circle background #3566EF
-  if (dist <= size / 2 - 4) {
-    // Draw "F" in center (scaled 4x)
-    // Vertical stem of F: x from 88 to 116, y from 64 to 192
-    const inStem = x >= 88 && x <= 116 && y >= 64 && y <= 192;
-    // Top bar of F: x from 88 to 176, y from 64 to 92
-    const inTopBar = x >= 88 && x <= 176 && y >= 64 && y <= 92;
-    // Middle bar of F: x from 88 to 156, y from 116 to 140
-    const inMidBar = x >= 88 && x <= 156 && y >= 116 && y <= 140;
+    // Circle background #3566EF
+    if (dist <= size / 2 - Math.max(1, size * 0.02)) {
+      // Scale relative to size
+      const scale = size / 256;
+      // Vertical stem of F
+      const inStem = x >= 88 * scale && x <= 118 * scale && y >= 64 * scale && y <= 192 * scale;
+      // Top bar of F
+      const inTopBar = x >= 88 * scale && x <= 176 * scale && y >= 64 * scale && y <= 94 * scale;
+      // Middle bar of F
+      const inMidBar = x >= 88 * scale && x <= 156 * scale && y >= 116 * scale && y <= 142 * scale;
 
-    if (inStem || inTopBar || inMidBar) {
-      return [255, 255, 255, 255]; // White letter F
+      if (inStem || inTopBar || inMidBar) {
+        return [255, 255, 255, 255]; // White letter F
+      }
+      return [53, 102, 239, 255]; // Blue background
     }
-    return [53, 102, 239, 255]; // Blue background
-  }
-  return [0, 0, 0, 0]; // Transparent
-});
+    return [0, 0, 0, 0]; // Transparent
+  });
+}
 
-const outPath = path.resolve('windows/build/icon.png');
-fs.writeFileSync(outPath, pngBuf);
-console.log('Generated Flik icon at:', outPath);
+// 1. Windows icon (256x256)
+fs.writeFileSync(path.resolve('windows/build/icon.png'), generateFlikIcon(256));
+
+// 2. Android launcher icons
+const mipmaps = [
+  { folder: 'mipmap-mdpi', size: 48 },
+  { folder: 'mipmap-hdpi', size: 72 },
+  { folder: 'mipmap-xhdpi', size: 96 },
+  { folder: 'mipmap-xxhdpi', size: 144 },
+  { folder: 'mipmap-xxxhdpi', size: 192 },
+];
+
+for (const m of mipmaps) {
+  const dir = path.resolve(`android/android/app/src/main/res/${m.folder}`);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ic_launcher.png'), generateFlikIcon(m.size));
+}
+
+console.log('Successfully generated Flik icons for Windows and Android mipmaps.');
