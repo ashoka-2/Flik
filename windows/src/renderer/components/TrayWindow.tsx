@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 interface DeviceInfo {
   deviceId: string;
   deviceName: string;
+  storagePath?: string;
   ip: string;
   port: number;
   qrPayload: string;
@@ -11,6 +12,7 @@ interface DeviceInfo {
 
 export const TrayWindow: React.FC = () => {
   const [info, setInfo] = useState<DeviceInfo | null>(null);
+  const [storagePath, setStoragePath] = useState<string>('');
   const [startWithWin, setStartWithWin] = useState<boolean>(false);
   const [peers, setPeers] = useState<any[]>([]);
   const [editingName, setEditingName] = useState<boolean>(false);
@@ -24,6 +26,13 @@ export const TrayWindow: React.FC = () => {
         setInfo(devInfo);
         if (devInfo) {
           setDeviceName(devInfo.deviceName);
+          if (devInfo.storagePath) {
+            setStoragePath(devInfo.storagePath);
+          }
+        }
+        const sPath = await window.flik.getStoragePath?.();
+        if (sPath) {
+          setStoragePath(sPath);
         }
         const winStart = await window.flik.getStartWithWindows();
         setStartWithWin(winStart);
@@ -45,6 +54,15 @@ export const TrayWindow: React.FC = () => {
     setEditingName(false);
     const updated = await window.flik?.getDeviceInfo();
     if (updated) setInfo(updated);
+  };
+
+  const handleChooseFolder = async () => {
+    if (window.flik?.chooseStoragePath) {
+      const chosen = await window.flik.chooseStoragePath();
+      if (chosen) {
+        setStoragePath(chosen);
+      }
+    }
   };
 
   useEffect(() => {
@@ -175,7 +193,50 @@ export const TrayWindow: React.FC = () => {
         </div>
       </div>
 
-      <div className="tray-controls">
+      {/* Storage Destination Folder Configuration */}
+      <div style={{
+        marginTop: 10,
+        marginHorizontal: 16,
+        padding: '10px 14px',
+        borderRadius: 12,
+        background: 'var(--raised)',
+        border: '1px solid var(--line)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>
+            Save Folder
+          </span>
+          <button
+            className="btn-pill"
+            style={{ height: 24, padding: '0 8px', fontSize: 11 }}
+            onClick={handleChooseFolder}
+          >
+            Change...
+          </button>
+        </div>
+        <div
+          style={{
+            fontSize: 12,
+            color: 'var(--text)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            cursor: 'pointer',
+            textDecoration: 'underline dotted'
+          }}
+          title={storagePath ? `${storagePath} (Click to open)` : 'Click to select folder'}
+          onClick={() => {
+            if (storagePath) window.flik?.openFolder(storagePath);
+          }}
+        >
+          📁 {storagePath || 'Loading path...'}
+        </div>
+      </div>
+
+      <div className="tray-controls" style={{ marginTop: 12 }}>
         <button
           className="btn-pill primary"
           style={{ width: '100%' }}

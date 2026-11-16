@@ -53,6 +53,12 @@ export class FlikReceiverServer extends EventEmitter {
     this.initTempDir();
   }
 
+  // Dynamic storage directory update when user chooses a new folder
+  public setStorageDir(newDir: string): void {
+    this.tempDir = newDir;
+    this.initTempDir();
+  }
+
   // Ensures temp directory exists and removes any stale partial files left from previous runs.
   private initTempDir(): void {
     try {
@@ -125,6 +131,25 @@ export class FlikReceiverServer extends EventEmitter {
   }
 
   private setupRoutes(): void {
+    // GET /media - Local media streamer for images and videos with range requests
+    this.app.get('/media', (req: Request, res: Response) => {
+      const fileQuery = req.query.file as string;
+      if (!fileQuery) {
+        res.status(400).send('Missing file parameter');
+        return;
+      }
+      try {
+        const decoded = decodeURIComponent(fileQuery);
+        const targetPath = path.resolve(decoded);
+        if (fs.existsSync(targetPath)) {
+          return res.sendFile(targetPath);
+        }
+      } catch (e) {
+        console.error('Failed serving /media:', e);
+      }
+      res.status(404).send('File not found');
+    });
+
     // GET /ping - Lightweight connectivity and capacity pre-flight check
     this.app.get('/ping', async (_req: Request, res: Response) => {
       try {
@@ -247,7 +272,7 @@ export class FlikReceiverServer extends EventEmitter {
             try {
               meta = JSON.parse(val) as TransferMeta;
               this.activeTransferId = meta.transferId;
-              transferDir = this.tempDir;
+              transferDir = this.store.getStoragePath();
               if (!fs.existsSync(transferDir)) {
                 fs.mkdirSync(transferDir, { recursive: true });
               }

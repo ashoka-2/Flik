@@ -5,9 +5,9 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 // Provides hardware sensor integration: wrist flick gesture detection, continuous tilt, and compass heading.
 class SensorService {
-  // Flick sensitivity thresholds
-  static const double flickThreshold = 12.0; // Responsive flick gesture
-  static const int cooldownMs = 600; // 600ms cooldown
+  // Flick sensitivity thresholds - tuned for effortless, gentle wrist flicking
+  static const double flickThreshold = 7.5; // Responsive to small flick gesture
+  static const int cooldownMs = 500; // 500ms cooldown
 
   StreamSubscription? _userAccelSub;
   StreamSubscription? _rawAccelSub;

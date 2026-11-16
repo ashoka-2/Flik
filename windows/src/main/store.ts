@@ -1,8 +1,9 @@
-// Manages persistent configuration, trusted paired devices, and security tokens for Flik Windows.
+// Manages persistent configuration, trusted paired devices, storage folder path, and security tokens for Flik Windows.
 
 import Store from 'electron-store';
 import crypto from 'crypto';
 import os from 'os';
+import path from 'path';
 import { TrustedDevice } from '../shared/types';
 import { constantTimeCompare } from '../shared/crypto';
 
@@ -11,12 +12,14 @@ interface FlikStoreSchema {
   deviceName: string;
   trustedDevices: Record<string, TrustedDevice>;
   startWithWindows: boolean;
+  storagePath: string;
 }
 
 export class FlikSettingsStore {
   private store: Store<FlikStoreSchema>;
 
   constructor() {
+    const defaultStorage = path.join(os.homedir(), 'Downloads', 'FlikTransfers');
     this.store = new Store<FlikStoreSchema>({
       name: 'flik-settings',
       defaults: {
@@ -24,6 +27,7 @@ export class FlikSettingsStore {
         deviceName: os.hostname() || 'Windows PC',
         trustedDevices: {},
         startWithWindows: false,
+        storagePath: defaultStorage,
       },
     });
   }
@@ -43,6 +47,20 @@ export class FlikSettingsStore {
 
   public setDeviceName(name: string): void {
     this.store.set('deviceName', name.trim());
+  }
+
+  public getStoragePath(): string {
+    const custom = this.store.get('storagePath');
+    if (custom && typeof custom === 'string' && custom.trim().length > 0) {
+      return custom.trim();
+    }
+    return path.join(os.homedir(), 'Downloads', 'FlikTransfers');
+  }
+
+  public setStoragePath(dirPath: string): void {
+    if (dirPath && dirPath.trim().length > 0) {
+      this.store.set('storagePath', dirPath.trim());
+    }
   }
 
   public getTrustedDevices(): TrustedDevice[] {

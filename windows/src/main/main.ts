@@ -53,8 +53,8 @@ class FlikConnectorApp {
   private pendingPairings: Map<string, (accept: boolean) => void> = new Map();
 
   constructor() {
-    this.tempWorkspace = path.join(app.getPath('temp'), 'FlikTransfers');
     this.store = new FlikSettingsStore();
+    this.tempWorkspace = this.store.getStoragePath();
     this.server = new FlikReceiverServer(this.store, this.tempWorkspace);
     this.mdns = new FlikMdnsService();
     this.detectLocalIp();
@@ -545,11 +545,38 @@ class FlikConnectorApp {
       this.trayWindow?.hide();
     });
 
+    // Storage directory configuration
+    ipcMain.handle('flik:get-storage-path', () => {
+      return this.store.getStoragePath();
+    });
+
+    ipcMain.handle('flik:set-storage-path', (_event, dirPath: string) => {
+      this.store.setStoragePath(dirPath);
+      this.server.setStorageDir(dirPath);
+      return true;
+    });
+
+    ipcMain.handle('flik:choose-storage-path', async () => {
+      const result = await dialog.showOpenDialog({
+        title: 'Choose Folder to Save Flik Transfers',
+        defaultPath: this.store.getStoragePath(),
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (!result.canceled && result.filePaths && result.filePaths.length > 0) {
+        const chosen = result.filePaths[0];
+        this.store.setStoragePath(chosen);
+        this.server.setStorageDir(chosen);
+        return chosen;
+      }
+      return null;
+    });
+
     // Returns local device status, IP, port, and QR data payload
     ipcMain.handle('flik:get-device-info', () => {
       return {
         deviceId: this.store.getDeviceId(),
         deviceName: this.store.getDeviceName(),
+        storagePath: this.store.getStoragePath(),
         ip: this.localIp,
         port: this.boundPort,
         qrPayload: JSON.stringify({

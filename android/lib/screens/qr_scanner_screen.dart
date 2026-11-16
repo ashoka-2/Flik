@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:file_picker/file_picker.dart';
 import '../services/connection_pool_service.dart';
 import '../theme/tokens.dart';
 
-// High-speed camera QR code scanner with CameraX error recovery and manual IP fallback.
+// QR Code Scanner enabling instant pairing with Flik Connector on PC or another phone.
+// Also provides manual IP address input and gallery image QR analysis as fail-safes.
 class QrScannerScreen extends StatefulWidget {
   final ConnectionPoolService pool;
   final void Function(String message) onToast;
@@ -55,7 +57,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     _controller?.dispose();
     _controller = MobileScannerController(
       autoStart: true,
-      formats: const [BarcodeFormat.qrCode],
+      detectionSpeed: DetectionSpeed.noDuplicates,
       facing: CameraFacing.back,
     );
 
@@ -79,27 +81,60 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       final raw = barcode.rawValue;
       if (raw != null && raw.isNotEmpty) {
         try {
-          final data = jsonDecode(raw) as Map<String, dynamic>;
-          final ip = data['ip'] as String?;
-          final port = (data['port'] as num?)?.toInt();
-          final deviceName = (data['deviceName'] as String?) ?? 'PC';
+          final payload = jsonDecode(raw) as Map<String, dynamic>;
+          final ip = payload['ip'] as String?;
+          final port = (payload['port'] as num?)?.toInt() ?? 54321;
 
-          if (ip != null && port != null) {
-            _hasScanned = true;
-            widget.onToast('Connecting to $deviceName ($ip)...');
+          if (ip != null && ip.isNotEmpty) {
+            setState(() => _hasScanned = true);
+            widget.onToast('Connecting to PC at $ip:$port...');
+
             final success = await widget.pool.addManualDevice(ip, port);
             if (success) {
-              widget.onToast('Connected to $deviceName');
+              widget.onToast('Connected successfully!');
+              if (mounted) {
+                Navigator.pop(context, true);
+              }
+              return;
+            } else {
+              widget.onToast("Could not reach PC at $ip:$port. Check that both devices are on the same Wi-Fi.");
+              setState(() => _hasScanned = false);
             }
-            if (mounted) {
-              Navigator.pop(context, true);
-            }
-            return;
           }
         } catch (_) {
-          // Ignore non-Flik QR codes during scan
+          if (raw.startsWith('http://') || raw.startsWith('https://')) {
+            final uri = Uri.tryParse(raw);
+            if (uri != null && uri.host.isNotEmpty) {
+              setState(() => _hasScanned = true);
+              widget.onToast('Connecting to ${uri.host}:${uri.port}...');
+              final success = await widget.pool.addManualDevice(uri.host, uri.port != 0 ? uri.port : 54321);
+              if (success) {
+                widget.onToast('Connected successfully!');
+                if (mounted) Navigator.pop(context, true);
+                return;
+              }
+            }
+          }
         }
       }
+    }
+  }
+
+  Future<void> _pickQrFromGallery() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      if (result != null && result.files.single.path != null) {
+        final path = result.files.single.path!;
+        widget.onToast('Analyzing image for QR code...');
+        final barcodeCapture = await _controller?.analyzeImage(path);
+        if (barcodeCapture != null && barcodeCapture.barcodes.isNotEmpty) {
+          _onDetect(barcodeCapture);
+        } else {
+          widget.onToast('No QR code found in selected image.');
+        }
+      }
+    } catch (e) {
+      widget.onToast('Could not analyze image: $e');
     }
   }
 
@@ -111,13 +146,16 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: FlikTokens.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Connect by IP Address', style: TextStyle(color: FlikTokens.text, fontSize: 18, fontWeight: FontWeight.w600)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(FlikTokens.radiusGroup),
+          side: const BorderSide(color: FlikTokens.line),
+        ),
+        title: const Text('Enter PC IP Address', style: TextStyle(color: FlikTokens.text, fontSize: 18)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Enter the Wi-Fi IP address shown on your Windows Flik Connector:',
+              'Enter the local Wi-Fi IP address shown on your Windows Flik Connector screen:',
               style: TextStyle(color: FlikTokens.muted, fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -165,7 +203,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                   widget.onToast('Connected successfully!');
                   if (mounted) Navigator.pop(context, true);
                 } else {
-                  widget.onToast("Could not reach $ip:$port. Check that both are on the same Wi-Fi.");
+                  widget.onToast("Could not reach $ip:$port. Check that both devices are on the same Wi-Fi.");
                 }
               }
             },
@@ -185,9 +223,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         backgroundColor: Colors.black.withOpacity(0.6),
         title: const Text('Scan QR Code'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.image_search, color: FlikTokens.accentSoft),
+            tooltip: 'Scan QR from Image',
+            onPressed: _pickQrFromGallery,
+          ),
           TextButton.icon(
             onPressed: _showManualIpDialog,
-            icon: const Icon(Icons.edit, size: 16, color: FlikTokens.accentSoft),
+            icon: const Icon(Icons.dialpad, size: 16, color: FlikTokens.accentSoft),
             label: const Text('Enter IP', style: TextStyle(color: FlikTokens.accentSoft)),
           ),
           if (_hasPermission && _controller != null) ...[
@@ -283,7 +326,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     const SizedBox(height: 8),
                     TextButton.icon(
                       onPressed: _showManualIpDialog,
-                      icon: const Icon(Icons.keyboard, size: 16),
+                      icon: const Icon(Icons.dialpad, size: 16),
                       label: const Text('Enter PC IP Directly'),
                       style: TextButton.styleFrom(foregroundColor: FlikTokens.accentSoft),
                     ),
@@ -325,15 +368,31 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: _showManualIpDialog,
-                icon: const Icon(Icons.dialpad, size: 16, color: Colors.white),
-                label: const Text('Or Enter IP Manually', style: TextStyle(color: Colors.white, fontSize: 13)),
-                style: OutlinedButton.styleFrom(
-                  backgroundColor: Colors.black45,
-                  side: const BorderSide(color: FlikTokens.line),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FlikTokens.radiusPill)),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _pickQrFromGallery,
+                    icon: const Icon(Icons.image_search, size: 16, color: Colors.white),
+                    label: const Text('Scan Image', style: TextStyle(color: Colors.white, fontSize: 13)),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.black45,
+                      side: const BorderSide(color: FlikTokens.line),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FlikTokens.radiusPill)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    onPressed: _showManualIpDialog,
+                    icon: const Icon(Icons.dialpad, size: 16, color: Colors.white),
+                    label: const Text('Enter IP Manually', style: TextStyle(color: Colors.white, fontSize: 13)),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.black45,
+                      side: const BorderSide(color: FlikTokens.line),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FlikTokens.radiusPill)),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

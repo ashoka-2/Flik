@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ActiveTransferCard } from '../../shared/types';
 
 interface TransferCardProps {
@@ -15,10 +15,22 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   const firstItem = card.items[0];
   const sizeMb = firstItem ? (firstItem.size / (1024 * 1024)).toFixed(1) : '0';
 
-  const [imgSrc, setImgSrc] = useState<string>(() => {
-    if (!firstItem?.localPath) return '';
-    return `flik-media://view?file=${encodeURIComponent(firstItem.localPath)}`;
-  });
+  const [imgSrc, setImgSrc] = useState<string>('');
+
+  useEffect(() => {
+    let isMounted = true;
+    if (firstItem?.localPath) {
+      // 1. Instantly read base64 data URL via IPC directly from disk
+      window.flik?.readMediaDataUrl?.(firstItem.localPath).then((dataUrl) => {
+        if (isMounted && dataUrl) {
+          setImgSrc(dataUrl);
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [firstItem?.localPath]);
 
   const handleImgError = async () => {
     if (firstItem?.localPath && window.flik?.readMediaDataUrl) {
@@ -31,7 +43,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Prevent dragging when clicking interactive buttons
-    if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+    if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'VIDEO') return;
 
     setIsDragging(true);
     dragOffset.current = {
@@ -77,6 +89,10 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
     }
   };
 
+  const isVideo = firstItem?.kind === 'video' || firstItem?.mime?.startsWith('video/');
+  const isImage = firstItem?.kind === 'image' || firstItem?.mime?.startsWith('image/');
+  const mediaUrl = imgSrc || (firstItem?.localPath ? `http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}` : '');
+
   return (
     <div
       ref={cardRef}
@@ -103,11 +119,21 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
         </button>
       </div>
 
-      {/* If this card has an image, display full photo preview like in the video */}
-      {firstItem?.kind === 'image' ? (
+      {/* Media Preview: Image or Video */}
+      {isVideo && firstItem?.localPath ? (
+        <div className="photo-card-body">
+          <video
+            src={`http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}`}
+            controls
+            autoPlay
+            muted
+            className="photo-card-img"
+          />
+        </div>
+      ) : isImage ? (
         <div className="photo-card-body">
           <img
-            src={imgSrc}
+            src={mediaUrl}
             alt={firstItem?.name || 'Photo'}
             className="photo-card-img"
             onError={handleImgError}
@@ -145,11 +171,12 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
           className="btn-pill"
           style={{ flex: 1, height: 36 }}
           onClick={async () => {
-            const paths = card.items.map((i) => i.localPath);
-            await window.flik?.saveFilesToFolder(paths);
+            if (firstItem?.localPath) {
+              window.flik?.openFolder(firstItem.localPath);
+            }
           }}
         >
-          Save
+          Folder
         </button>
       </div>
     </div>

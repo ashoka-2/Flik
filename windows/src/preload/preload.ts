@@ -44,6 +44,19 @@ const flikApi = {
     return await ipcRenderer.invoke('flik:read-media-data-url', filePath);
   },
 
+  // Storage destination folder management
+  getStoragePath: async (): Promise<string> => {
+    return await ipcRenderer.invoke('flik:get-storage-path');
+  },
+
+  setStoragePath: async (dirPath: string): Promise<boolean> => {
+    return await ipcRenderer.invoke('flik:set-storage-path', dirPath);
+  },
+
+  chooseStoragePath: async (): Promise<string | null> => {
+    return await ipcRenderer.invoke('flik:choose-storage-path');
+  },
+
   // Sets human-readable device name
   setDeviceName: async (name: string) => {
     return await ipcRenderer.invoke('flik:set-device-name', name);
