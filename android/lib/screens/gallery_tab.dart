@@ -9,8 +9,8 @@ import '../widgets/flik_thumbnail_image.dart';
 import 'media_viewer_screen.dart';
 
 // High-performance gallery browser supporting Chronological Photos view,
-// Categorized Albums view matching phone gallery (Camera, Screenshots, Videos, More Albums),
-// multi-selection, and wrist-flick gesture sending.
+// Categorized Albums view precisely matching mobile gallery (All, Camera, Favorites, Videos, Screenshots, More Albums),
+// instant search filtering, multi-selection, and wrist-flick gesture sending.
 class GalleryTab extends ConsumerStatefulWidget {
   final void Function(List<TransferItem> items)? onStageItems;
 
@@ -21,13 +21,20 @@ class GalleryTab extends ConsumerStatefulWidget {
 }
 
 class _GalleryTabState extends ConsumerState<GalleryTab> {
-  List<AssetPathEntity> _albums = [];
   AssetPathEntity? _selectedAlbum;
   List<AssetEntity> _assets = [];
   final Set<String> _selectedAssetIds = {};
 
   final Map<String, int> _albumCounts = {};
   final Map<String, AssetEntity?> _albumCovers = {};
+
+  // Top 5 primary albums matching user gallery reference
+  AssetPathEntity? _albumAll;
+  AssetPathEntity? _albumCamera;
+  AssetPathEntity? _albumFavorites;
+  AssetPathEntity? _albumVideos;
+  AssetPathEntity? _albumScreenshots;
+  List<AssetPathEntity> _moreAlbums = [];
 
   bool _isAlbumsView = false;
   bool _isLoading = true;
@@ -37,6 +44,9 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
   bool _hasMore = true;
   bool _sortLatestFirst = true;
 
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   final ScrollController _scrollController = ScrollController();
   SensorService? _sensorService;
 
@@ -44,6 +54,11 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim().toLowerCase();
+      });
+    });
     _loadAlbums();
 
     // Listen to physical wrist flick gesture when multiple photos are selected
@@ -62,11 +77,13 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     _sensorService?.stop();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400) {
+    if (_scrollController.hasClients &&
+        _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 400) {
       _loadMoreAssets();
     }
   }
@@ -75,24 +92,57 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     setState(() => _isLoading = true);
     final permission = await PhotoManager.requestPermissionExtend();
     if (permission.isAuth || permission.hasAccess) {
-      final filterOption = FilterOptionGroup(
-        orders: [
-          const OrderOption(
-            type: OrderOptionType.createDate,
-            asc: false,
-          ),
-        ],
-      );
-
-      final albums = await PhotoManager.getAssetPathList(
+      // 1. Fetch common media (images + videos) without restrictive timestamp filters
+      final commonAlbums = await PhotoManager.getAssetPathList(
         type: RequestType.common,
         hasAll: true,
-        filterOption: filterOption,
       );
 
-      if (albums.isNotEmpty) {
-        _albums = albums;
-        _selectedAlbum = albums.first;
+      // 2. Fetch video-specific path to ensure an all-videos album is present
+      final videoAlbums = await PhotoManager.getAssetPathList(
+        type: RequestType.video,
+        hasAll: true,
+      );
+
+      if (commonAlbums.isNotEmpty) {
+        // Categorize into the 5 primary albums and "More albums"
+        AssetPathEntity? foundAll;
+        AssetPathEntity? foundCamera;
+        AssetPathEntity? foundFavorites;
+        AssetPathEntity? foundVideos;
+        AssetPathEntity? foundScreenshots;
+        final others = <AssetPathEntity>[];
+
+        for (final album in commonAlbums) {
+          final name = album.name.toLowerCase();
+          if (album.isAll) {
+            foundAll = album;
+          } else if (name == 'camera' || name == 'dcim' || name.contains('camera')) {
+            foundCamera ??= album;
+          } else if (name.contains('favorit') || name.contains('favourite')) {
+            foundFavorites ??= album;
+          } else if (name.contains('screenshot') || name.contains('screen_shot')) {
+            foundScreenshots ??= album;
+          } else if (name.contains('video')) {
+            foundVideos ??= album;
+          } else {
+            others.add(album);
+          }
+        }
+
+        // Fallback for Videos album from video-specific query if not found in buckets
+        if (foundVideos == null && videoAlbums.isNotEmpty) {
+          foundVideos = videoAlbums.first;
+        }
+
+        _albumAll = foundAll ?? commonAlbums.first;
+        _albumCamera = foundCamera;
+        _albumFavorites = foundFavorites;
+        _albumVideos = foundVideos;
+        _albumScreenshots = foundScreenshots;
+        _moreAlbums = others;
+
+        _selectedAlbum = _albumAll;
         _currentPage = 0;
         _hasMore = true;
 
@@ -102,8 +152,15 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
         );
         _applySort(firstBatch);
 
-        // Fetch counts and covers for the Albums grid asynchronously
-        _loadAlbumMetadata(albums);
+        // Fetch counts and covers for album cards asynchronously
+        _loadAlbumMetadata([
+          if (_albumAll != null) _albumAll!,
+          if (_albumCamera != null) _albumCamera!,
+          if (_albumFavorites != null) _albumFavorites!,
+          if (_albumVideos != null) _albumVideos!,
+          if (_albumScreenshots != null) _albumScreenshots!,
+          ..._moreAlbums,
+        ]);
 
         if (mounted) {
           setState(() {
@@ -158,6 +215,10 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
       _hasMore = true;
       _selectedAssetIds.clear();
     });
+
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
 
     final items = await album.getAssetListPaged(page: 0, size: _pageSize);
     _applySort(items);
@@ -272,8 +333,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
     return Column(
       children: [
-        // Navigation Bar: Toggle Photos vs Albums, or show Back button if inside an Album
-        _buildTopNavigation(),
+        // Top Search Bar & Navigation Control
+        _buildTopHeader(),
 
         // Body: Either Albums Grid View or Photos Grid View
         Expanded(
@@ -286,88 +347,128 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     );
   }
 
-  Widget _buildTopNavigation() {
+  Widget _buildTopHeader() {
     final isInsideSubAlbum = _selectedAlbum != null && !_selectedAlbum!.isAll && !_isAlbumsView;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: const BoxDecoration(
-        color: Colors.transparent,
-      ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (isInsideSubAlbum) ...[
-            IconButton(
-              icon: const Icon(Icons.arrow_back, color: FlikTokens.text, size: 20),
-              onPressed: () => setState(() => _isAlbumsView = true),
-              tooltip: 'Back to Albums',
+          // Search Bar matching the user's reference gallery
+          Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: FlikTokens.raised,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: FlikTokens.line),
             ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                '${_selectedAlbum?.name ?? "Album"} (${_assets.length})',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: FlikTokens.text),
-                overflow: TextOverflow.ellipsis,
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.search, color: FlikTokens.muted, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: FlikTokens.text, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Times, places, file name...',
+                      hintStyle: TextStyle(color: FlikTokens.muted, fontSize: 13),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                if (_searchQuery.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => _searchController.clear(),
+                    child: const Icon(Icons.close, color: FlikTokens.muted, size: 18),
+                  )
+                else
+                  const Icon(Icons.more_vert, color: FlikTokens.muted, size: 20),
+              ],
             ),
-          ] else ...[
-            // View Mode Pill Switch: Photos / Albums
-            Container(
-              decoration: BoxDecoration(
-                color: FlikTokens.raised,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: FlikTokens.line),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildSegmentButton('Photos', !_isAlbumsView, () {
-                    if (_isAlbumsView) {
-                      if (_albums.isNotEmpty && _selectedAlbum != _albums.first) {
-                        _switchAlbum(_albums.first);
-                      } else {
-                        setState(() => _isAlbumsView = false);
-                      }
-                    }
-                  }),
-                  _buildSegmentButton('Albums', _isAlbumsView, () {
-                    setState(() => _isAlbumsView = true);
-                  }),
-                ],
-              ),
-            ),
-            const Spacer(),
-          ],
+          ),
+          const SizedBox(height: 8),
 
-          // Sort Order Toggle (only relevant in photo grid)
-          if (!_isAlbumsView)
-            InkWell(
-              onTap: _toggleSort,
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: FlikTokens.raised,
+          // Secondary Controls: Sub-album back button or Photos/Albums pill switch
+          Row(
+            children: [
+              if (isInsideSubAlbum) ...[
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: FlikTokens.text, size: 20),
+                  onPressed: () => setState(() => _isAlbumsView = true),
+                  tooltip: 'Back to Albums',
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '${_selectedAlbum?.name ?? "Album"} (${_albumCounts[_selectedAlbum?.id] ?? _assets.length})',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: FlikTokens.text),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ] else ...[
+                // View Mode Pill Switch: Photos / Albums
+                Container(
+                  decoration: BoxDecoration(
+                    color: FlikTokens.raised,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: FlikTokens.line),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildSegmentButton('Photos', !_isAlbumsView, () {
+                        if (_isAlbumsView) {
+                          if (_albumAll != null && _selectedAlbum != _albumAll) {
+                            _switchAlbum(_albumAll!);
+                          } else {
+                            setState(() => _isAlbumsView = false);
+                          }
+                        }
+                      }),
+                      _buildSegmentButton('Albums', _isAlbumsView, () {
+                        setState(() => _isAlbumsView = true);
+                      }),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+              ],
+
+              // Sort Order Toggle (only in Photos view)
+              if (!_isAlbumsView)
+                InkWell(
+                  onTap: _toggleSort,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: FlikTokens.line),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _sortLatestFirst ? Icons.arrow_downward : Icons.arrow_upward,
-                      size: 13,
-                      color: FlikTokens.accentSoft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: FlikTokens.raised,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: FlikTokens.line),
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _sortLatestFirst ? 'Newest' : 'Oldest',
-                      style: const TextStyle(fontSize: 11, color: FlikTokens.text, fontWeight: FontWeight.w600),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _sortLatestFirst ? Icons.arrow_downward : Icons.arrow_upward,
+                          size: 13,
+                          color: FlikTokens.accentSoft,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _sortLatestFirst ? 'Newest' : 'Oldest',
+                          style: const TextStyle(fontSize: 11, color: FlikTokens.text, fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -394,51 +495,57 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     );
   }
 
-  // Beautiful Albums View matching Image 3 with Top Categories and "More albums"
+  // Categorized Albums View precisely matching Image 3 (All, Camera, Favorites, Videos, Screenshots, More albums)
   Widget _buildAlbumsView() {
-    // Categorize albums into top main and others
-    final mainAlbums = <AssetPathEntity>[];
-    final otherAlbums = <AssetPathEntity>[];
+    // Collect top primary albums that exist
+    final primaryAlbums = <AssetPathEntity>[
+      if (_albumAll != null) _albumAll!,
+      if (_albumCamera != null) _albumCamera!,
+      if (_albumFavorites != null) _albumFavorites!,
+      if (_albumVideos != null) _albumVideos!,
+      if (_albumScreenshots != null) _albumScreenshots!,
+    ];
 
-    for (final album in _albums) {
-      final name = album.name.toLowerCase();
-      if (album.isAll || name == 'recent' || name.contains('camera') || name.contains('video') || name.contains('screenshot') || name.contains('favorite')) {
-        mainAlbums.add(album);
-      } else {
-        otherAlbums.add(album);
-      }
-    }
+    // Filter by search query if user typed anything
+    final filteredPrimary = _searchQuery.isEmpty
+        ? primaryAlbums
+        : primaryAlbums.where((a) => a.name.toLowerCase().contains(_searchQuery)).toList();
+
+    final filteredOthers = _searchQuery.isEmpty
+        ? _moreAlbums
+        : _moreAlbums.where((a) => a.name.toLowerCase().contains(_searchQuery)).toList();
 
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       children: [
-        // Main Albums Grid (All, Camera, Screenshots, Videos, etc.)
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 14,
-            childAspectRatio: 0.78,
+        // Primary Top Albums (Row 1: All, Camera, Favorites | Row 2: Videos, Screenshots)
+        if (filteredPrimary.isNotEmpty)
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 14,
+              childAspectRatio: 0.78,
+            ),
+            itemCount: filteredPrimary.length,
+            itemBuilder: (context, index) {
+              return _buildAlbumCard(filteredPrimary[index]);
+            },
           ),
-          itemCount: mainAlbums.length,
-          itemBuilder: (context, index) {
-            return _buildAlbumCard(mainAlbums[index]);
-          },
-        ),
 
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
         // "More albums" Section Header
-        if (otherAlbums.isNotEmpty) ...[
+        if (filteredOthers.isNotEmpty) ...[
           const Padding(
             padding: EdgeInsets.only(left: 4, bottom: 12),
             child: Text(
               'More albums',
               style: TextStyle(
                 color: FlikTokens.text,
-                fontSize: 16,
+                fontSize: 17,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -448,13 +555,13 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
-              crossAxisSpacing: 12,
+              crossAxisSpacing: 10,
               mainAxisSpacing: 14,
               childAspectRatio: 0.78,
             ),
-            itemCount: otherAlbums.length,
+            itemCount: filteredOthers.length,
             itemBuilder: (context, index) {
-              return _buildAlbumCard(otherAlbums[index]);
+              return _buildAlbumCard(filteredOthers[index]);
             },
           ),
         ],
@@ -465,26 +572,26 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
   Widget _buildAlbumCard(AssetPathEntity album) {
     final count = _albumCounts[album.id] ?? 0;
     final coverAsset = _albumCovers[album.id];
-    final displayName = album.isAll ? 'All' : album.name;
+    final displayName = _formatAlbumName(album);
 
     return GestureDetector(
       onTap: () => _switchAlbum(album),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Album Thumbnail Cover
+          // Large Squarish Cover Thumbnail
           Expanded(
             child: Container(
               decoration: BoxDecoration(
                 color: FlikTokens.surface,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: FlikTokens.line),
               ),
               clipBehavior: Clip.antiAlias,
               child: coverAsset != null
                   ? FlikThumbnailImage(
                       asset: coverAsset,
-                      size: const ThumbnailSize.square(240),
+                      size: const ThumbnailSize.square(260),
                       fit: BoxFit.cover,
                     )
                   : const Center(
@@ -504,9 +611,9 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
               color: FlikTokens.text,
             ),
           ),
-          // Count
+          // Item Count Formatted (e.g., 3,731 or 586)
           Text(
-            count.toString(),
+            _formatCount(count),
             style: const TextStyle(
               fontSize: 11,
               color: FlikTokens.muted,
@@ -517,11 +624,36 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     );
   }
 
+  String _formatAlbumName(AssetPathEntity album) {
+    if (album.isAll) return 'All';
+    final name = album.name;
+    final lower = name.toLowerCase();
+    if (lower == 'camera' || lower == 'dcim') return 'Camera';
+    if (lower.contains('favorit')) return 'Favorites';
+    if (lower.contains('video')) return 'Videos';
+    if (lower.contains('screenshot')) return 'Screenshots';
+    return name;
+  }
+
+  String _formatCount(int count) {
+    if (count < 1000) return count.toString();
+    final str = count.toString();
+    final reg = RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))');
+    return str.replaceAllMapped(reg, (Match m) => '${m[1]},');
+  }
+
   // Photos Grid
   Widget _buildPhotosGrid() {
-    if (_assets.isEmpty) {
-      return const Center(
-        child: Text('No media items in this album', style: TextStyle(color: FlikTokens.muted)),
+    final displayedAssets = _searchQuery.isEmpty
+        ? _assets
+        : _assets.where((a) => (a.title ?? '').toLowerCase().contains(_searchQuery)).toList();
+
+    if (displayedAssets.isEmpty) {
+      return Center(
+        child: Text(
+          _searchQuery.isNotEmpty ? 'No media matching "$_searchQuery"' : 'No media items in this album',
+          style: const TextStyle(color: FlikTokens.muted),
+        ),
       );
     }
 
@@ -531,15 +663,15 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
         return GridView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(6),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 4,
             mainAxisSpacing: 4,
           ),
-          itemCount: _assets.length + (_hasMore ? 1 : 0),
+          itemCount: displayedAssets.length + (_hasMore && _searchQuery.isEmpty ? 1 : 0),
           itemBuilder: (context, index) {
-            if (index >= _assets.length) {
+            if (index >= displayedAssets.length) {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(12),
@@ -548,7 +680,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
               );
             }
 
-            final asset = _assets[index];
+            final asset = displayedAssets[index];
             final isSelected = _selectedAssetIds.contains(asset.id);
 
             return GestureDetector(
@@ -556,12 +688,11 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
                 if (_selectedAssetIds.isNotEmpty) {
                   _toggleSelection(asset);
                 } else {
-                  // Single tap opens Apple-style MediaViewer with Hero animation and flick send
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => MediaViewerScreen(
-                        assets: _assets,
+                        assets: displayedAssets,
                         initialIndex: index,
                       ),
                     ),
@@ -580,7 +711,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
                     ),
                   ),
 
-                  // Video Badge
+                  // Video Duration Badge
                   if (asset.type == AssetType.video)
                     Positioned(
                       bottom: 4,

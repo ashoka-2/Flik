@@ -7,7 +7,7 @@ import '../services/connection_pool_service.dart';
 import '../theme/tokens.dart';
 
 // QR Code Scanner enabling instant pairing with Flik Connector on PC or another phone.
-// Also provides manual IP address input and gallery image QR analysis as fail-safes.
+// Features robust lifecycle management, camera-flip, gallery image scanning, and manual IP input.
 class QrScannerScreen extends StatefulWidget {
   final ConnectionPoolService pool;
   final void Function(String message) onToast;
@@ -22,7 +22,7 @@ class QrScannerScreen extends StatefulWidget {
   State<QrScannerScreen> createState() => _QrScannerScreenState();
 }
 
-class _QrScannerScreenState extends State<QrScannerScreen> {
+class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingObserver {
   MobileScannerController? _controller;
   bool _hasScanned = false;
   bool _hasPermission = false;
@@ -31,7 +31,25 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkPermissionAndInit();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_controller == null || !_hasPermission) return;
+    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
+      _controller?.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      _controller?.start();
+    }
   }
 
   Future<void> _checkPermissionAndInit() async {
@@ -52,9 +70,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     try {
       _controller?.dispose();
       _controller = MobileScannerController(
-        autoStart: false,
-        detectionSpeed: DetectionSpeed.normal,
-        returnImage: false,
+        formats: const [BarcodeFormat.qrCode],
+        detectionSpeed: DetectionSpeed.noDuplicates,
+        autoStart: true,
       );
 
       if (mounted) {
@@ -63,23 +81,25 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           _isChecking = false;
         });
       }
-
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        try {
-          await _controller?.start();
-        } catch (e) {
-          debugPrint('Camera start error: $e');
-        }
-      });
     } catch (e) {
       debugPrint('Scanner init error: $e');
+      if (mounted) {
+        setState(() {
+          _isChecking = false;
+        });
+      }
     }
   }
 
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
+  Future<void> _retryCamera() async {
+    setState(() => _isChecking = true);
+    try {
+      await _controller?.stop();
+      _controller?.dispose();
+    } catch (_) {}
+    _controller = null;
+    await Future.delayed(const Duration(milliseconds: 250));
+    await _checkPermissionAndInit();
   }
 
   void _onDetect(BarcodeCapture capture) async {
@@ -310,6 +330,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           controller: _controller!,
           onDetect: _onDetect,
           errorBuilder: (context, error, child) {
+            final errorText = error.errorDetails?.message ?? error.errorCode.name;
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -319,7 +340,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                     const Icon(Icons.videocam_off, size: 48, color: FlikTokens.muted),
                     const SizedBox(height: 12),
                     Text(
-                      'Camera unavailable: ${error.errorCode.name}',
+                      'Camera unavailable: $errorText',
                       style: const TextStyle(color: FlikTokens.muted, fontSize: 13),
                       textAlign: TextAlign.center,
                     ),
@@ -328,9 +349,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton.icon(
-                          onPressed: _initScanner,
+                          onPressed: _retryCamera,
                           icon: const Icon(Icons.refresh, size: 16),
-                          label: const Text('Retry'),
+                          label: const Text('Retry Camera'),
                           style: ElevatedButton.styleFrom(backgroundColor: FlikTokens.surface, foregroundColor: Colors.white),
                         ),
                         const SizedBox(width: 8),
