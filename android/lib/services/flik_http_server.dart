@@ -167,13 +167,23 @@ class FlikHttpServer {
               final safeName = rawName.replaceAll(RegExp(r'[^\w\.\-\s]'), '_');
               final tempFile = File('${tempDir.path}/$safeName');
               await tempFile.writeAsBytes(bytes);
-              _partialFiles.add(tempFile);
+              // Save to custom receive folder if user specified one in Settings
+              final customPath = storage.getReceivePath();
+              String finalSavedPath = tempFile.path;
+              if (customPath != null && Directory(customPath).existsSync()) {
+                try {
+                  final destFile = File('$customPath/$safeName');
+                  await destFile.writeAsBytes(bytes);
+                  finalSavedPath = destFile.path;
+                } catch (_) {}
+              }
+              _partialFiles.add(File(finalSavedPath));
               savedFiles.add(safeName);
 
               // Save to Android Gallery if image or video
               final lower = safeName.toLowerCase();
               try {
-                if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
+                if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp') || lower.endsWith('.heic')) {
                   await Gal.putImage(tempFile.path, album: 'Flik');
                 } else if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.mkv')) {
                   await Gal.putVideo(tempFile.path, album: 'Flik');
@@ -196,16 +206,22 @@ class FlikHttpServer {
 
         // Record history
         final senderName = meta?.items.firstOrNull?.name ?? (savedFiles.isNotEmpty ? savedFiles.first : 'Received Files');
+        final firstSavedPath = _partialFiles.isNotEmpty ? _partialFiles.first.path : null;
+        final isImg = senderName.toLowerCase().endsWith('.jpg') || senderName.toLowerCase().endsWith('.png') || senderName.toLowerCase().endsWith('.webp') || senderName.toLowerCase().endsWith('.heic');
+        final isVid = senderName.toLowerCase().endsWith('.mp4') || senderName.toLowerCase().endsWith('.mov') || senderName.toLowerCase().endsWith('.mkv');
+
         await storage.addHistoryEntry(
           TransferHistoryEntry(
             id: meta?.transferId ?? const Uuid().v4(),
-            deviceName: 'Phone Peer',
+            deviceName: 'Flik Peer',
             isOutbound: false,
             itemsCount: savedFiles.length,
             totalBytes: totalBytes,
             timestamp: DateTime.now(),
             summaryName: senderName,
             status: 'completed',
+            localPath: firstSavedPath,
+            kind: isImg ? 'image' : (isVid ? 'video' : 'file'),
           ),
         );
 

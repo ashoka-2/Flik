@@ -14,9 +14,9 @@ import 'gallery_tab.dart';
 import 'files_tab.dart';
 import 'links_tab.dart';
 import 'library_tab.dart';
-import 'add_device_dialog.dart';
 import 'qr_scanner_screen.dart';
 import 'receive_screen.dart';
+import 'settings_screen.dart';
 
 // Main Flik mobile screen hosting spatial radar, tactile staged deck, tabs, and error toasts.
 // Supports resizable / collapsible drawer for viewing all gallery photos full screen,
@@ -214,14 +214,16 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                               );
                             },
                           ),
-                          // Manual Add Device Button
+                          // Settings Button
                           IconButton(
-                            icon: const Icon(Icons.add_circle_outline, color: FlikTokens.text),
-                            tooltip: 'Add Device by IP',
+                            icon: const Icon(Icons.settings_outlined, color: FlikTokens.text),
+                            tooltip: 'Settings',
                             onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (_) => AddDeviceDialog(pool: notifier.connectionPool),
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => SettingsScreen(storage: notifier.storage),
+                                ),
                               );
                             },
                           ),

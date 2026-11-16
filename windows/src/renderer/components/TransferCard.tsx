@@ -7,20 +7,21 @@ interface TransferCardProps {
   onDismiss: (id: string) => void;
 }
 
+// Pure floating media component with Apple-grade fluid animations, native drag-out,
+// left-click open, right-click reveal in File Explorer, and zero clunky wrapper box.
 export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChange, onDismiss }) => {
   const [isDragging, setIsDragging] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
+  const dragMoved = useRef(false);
 
   const firstItem = card.items[0];
-  const sizeMb = firstItem ? (firstItem.size / (1024 * 1024)).toFixed(1) : '0';
-
   const [imgSrc, setImgSrc] = useState<string>('');
 
   useEffect(() => {
     let isMounted = true;
     if (firstItem?.localPath) {
-      // 1. Instantly read base64 data URL via IPC directly from disk
+      // Instantly load base64 data URL via IPC with on-the-fly HEIC decoding
       window.flik?.readMediaDataUrl?.(firstItem.localPath).then((dataUrl) => {
         if (isMounted && dataUrl) {
           setImgSrc(dataUrl);
@@ -42,10 +43,11 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Prevent dragging when clicking interactive buttons
+    // If clicking close button or video controls, do not drag
     if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'VIDEO') return;
 
     setIsDragging(true);
+    dragMoved.current = false;
     dragOffset.current = {
       x: e.clientX - card.x,
       y: e.clientY - card.y,
@@ -55,8 +57,9 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging) return;
-    const newX = Math.max(10, Math.min(window.innerWidth - 300, e.clientX - dragOffset.current.x));
-    const newY = Math.max(10, Math.min(window.innerHeight - 200, e.clientY - dragOffset.current.y));
+    dragMoved.current = true;
+    const newX = Math.max(10, Math.min(window.innerWidth - 200, e.clientX - dragOffset.current.x));
+    const newY = Math.max(10, Math.min(window.innerHeight - 150, e.clientY - dragOffset.current.y));
     onPositionChange(card.id, newX, newY);
   };
 
@@ -69,7 +72,24 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
     }
   };
 
-  // Initiates native Windows drag-out to desktop, file explorer, or apps
+  // Left-click opens the image or video directly in default Windows viewer
+  const handleClick = (e: React.MouseEvent) => {
+    if (dragMoved.current) return;
+    if (firstItem?.localPath) {
+      window.flik?.openFile(firstItem.localPath);
+    }
+  };
+
+  // Right-click reveals and highlights the file inside File Explorer
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (firstItem?.localPath) {
+      window.flik?.showInFolder(firstItem.localPath);
+    }
+  };
+
+  // Native Windows drag-out into desktop, Photoshop, Discord, or folders
   const handleDragStart = (e: React.DragEvent) => {
     if (card.items.length > 0) {
       e.preventDefault();
@@ -78,25 +98,13 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
     }
   };
 
-  const getItemIcon = (kind: string) => {
-    switch (kind) {
-      case 'image':
-        return '📷';
-      case 'video':
-        return '🎬';
-      default:
-        return '📄';
-    }
-  };
-
   const isVideo = firstItem?.kind === 'video' || firstItem?.mime?.startsWith('video/');
-  const isImage = firstItem?.kind === 'image' || firstItem?.mime?.startsWith('image/');
   const mediaUrl = imgSrc || (firstItem?.localPath ? `http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}` : '');
 
   return (
     <div
       ref={cardRef}
-      className="flik-card interactive flying-in"
+      className="flik-floating-media interactive flying-in"
       data-interactive="true"
       style={{
         left: `${card.x}px`,
@@ -107,78 +115,39 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      title={`${firstItem?.name || 'Media'} (Left-click to open, Right-click to show in folder)`}
     >
-      <div className="card-header">
-        <span className="sender-pill">{card.senderName}</span>
-        <button
-          className="btn-pill"
-          style={{ height: 28, padding: '0 8px', fontSize: 11 }}
-          onClick={() => onDismiss(card.id)}
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Media Preview: Image or Video */}
+      {/* Pure Media: Video Player or Picture */}
       {isVideo && firstItem?.localPath ? (
-        <div className="photo-card-body">
-          <video
-            src={`http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}`}
-            controls
-            autoPlay
-            muted
-            className="photo-card-img"
-          />
-        </div>
-      ) : isImage ? (
-        <div className="photo-card-body">
-          <img
-            src={mediaUrl}
-            alt={firstItem?.name || 'Photo'}
-            className="photo-card-img"
-            onError={handleImgError}
-          />
-        </div>
+        <video
+          src={`http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}`}
+          controls
+          autoPlay
+          muted
+          className="media-content"
+        />
       ) : (
-        <div className="item-preview">
-          <div className="item-icon-box">{getItemIcon(firstItem?.kind || 'file')}</div>
-          <div className="item-info">
-            <span className="item-name" title={firstItem?.name}>
-              {firstItem?.name || 'Untitled File'}
-            </span>
-            <span className="item-meta">
-              {card.items.length > 1
-                ? `${card.items.length} files · ${sizeMb} MB`
-                : `${sizeMb} MB · ${firstItem?.kind || 'file'}`}
-            </span>
-          </div>
-        </div>
+        <img
+          src={mediaUrl}
+          alt={firstItem?.name || 'Photo'}
+          className="media-content"
+          onError={handleImgError}
+        />
       )}
 
-      <div className="card-actions">
-        <button
-          className="btn-pill primary"
-          style={{ flex: 1, height: 36 }}
-          onClick={() => {
-            if (firstItem?.localPath) {
-              window.flik?.openFolder(firstItem.localPath);
-            }
-          }}
-        >
-          Open
-        </button>
-        <button
-          className="btn-pill"
-          style={{ flex: 1, height: 36 }}
-          onClick={async () => {
-            if (firstItem?.localPath) {
-              window.flik?.openFolder(firstItem.localPath);
-            }
-          }}
-        >
-          Folder
-        </button>
-      </div>
+      {/* Floating subtle dismiss button on hover */}
+      <button
+        className="floating-dismiss-btn"
+        title="Dismiss from screen"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDismiss(card.id);
+        }}
+      >
+        ✕
+      </button>
     </div>
   );
 };

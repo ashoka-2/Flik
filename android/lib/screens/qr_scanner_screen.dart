@@ -35,37 +35,44 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   Future<void> _checkPermissionAndInit() async {
-    final status = await Permission.camera.status;
+    final status = await Permission.camera.request();
     if (status.isGranted) {
       _initScanner();
     } else {
-      final requested = await Permission.camera.request();
-      if (requested.isGranted) {
-        _initScanner();
-      } else {
-        if (mounted) {
-          setState(() {
-            _hasPermission = false;
-            _isChecking = false;
-          });
-        }
+      if (mounted) {
+        setState(() {
+          _hasPermission = false;
+          _isChecking = false;
+        });
       }
     }
   }
 
   void _initScanner() {
-    _controller?.dispose();
-    _controller = MobileScannerController(
-      autoStart: true,
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      facing: CameraFacing.back,
-    );
+    try {
+      _controller?.dispose();
+      _controller = MobileScannerController(
+        autoStart: false,
+        detectionSpeed: DetectionSpeed.normal,
+        returnImage: false,
+      );
 
-    if (mounted) {
-      setState(() {
-        _hasPermission = true;
-        _isChecking = false;
+      if (mounted) {
+        setState(() {
+          _hasPermission = true;
+          _isChecking = false;
+        });
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          await _controller?.start();
+        } catch (e) {
+          debugPrint('Camera start error: $e');
+        }
       });
+    } catch (e) {
+      debugPrint('Scanner init error: $e');
     }
   }
 
@@ -235,8 +242,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           ),
           if (_hasPermission && _controller != null) ...[
             IconButton(
-              icon: const Icon(Icons.flash_on),
-              onPressed: () => _controller?.toggleTorch(),
+              icon: const Icon(Icons.flip_camera_ios, size: 20),
+              onPressed: () => _controller?.switchCamera(),
             ),
           ],
         ],
@@ -317,13 +324,25 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: _initScanner,
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Retry Camera'),
-                      style: ElevatedButton.styleFrom(backgroundColor: FlikTokens.surface, foregroundColor: Colors.white),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _initScanner,
+                          icon: const Icon(Icons.refresh, size: 16),
+                          label: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(backgroundColor: FlikTokens.surface, foregroundColor: Colors.white),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: () => _controller?.switchCamera(),
+                          icon: const Icon(Icons.flip_camera_ios, size: 16),
+                          label: const Text('Flip'),
+                          style: ElevatedButton.styleFrom(backgroundColor: FlikTokens.surface, foregroundColor: Colors.white),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     TextButton.icon(
                       onPressed: _showManualIpDialog,
                       icon: const Icon(Icons.dialpad, size: 16),

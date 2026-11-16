@@ -8,6 +8,8 @@ class TransferHistoryEntry {
   final DateTime timestamp;
   final String summaryName;
   final String status; // 'completed', 'cancelled', 'failed'
+  final String? localPath;
+  final String? kind; // 'image', 'video', 'file'
 
   TransferHistoryEntry({
     required this.id,
@@ -18,6 +20,8 @@ class TransferHistoryEntry {
     required this.timestamp,
     required this.summaryName,
     required this.status,
+    this.localPath,
+    this.kind,
   });
 
   Map<String, dynamic> toJson() => {
@@ -29,6 +33,8 @@ class TransferHistoryEntry {
     'timestamp': timestamp.toIso8601String(),
     'summaryName': summaryName,
     'status': status,
+    'localPath': localPath,
+    'kind': kind,
   };
 
   factory TransferHistoryEntry.fromJson(Map<String, dynamic> json) => TransferHistoryEntry(
@@ -40,5 +46,7 @@ class TransferHistoryEntry {
     timestamp: DateTime.tryParse(json['timestamp'] as String? ?? '') ?? DateTime.now(),
     summaryName: json['summaryName'] as String? ?? 'Transfer',
     status: json['status'] as String? ?? 'completed',
+    localPath: json['localPath'] as String?,
+    kind: json['kind'] as String?,
   );
 }

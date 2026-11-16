@@ -29,6 +29,16 @@ const flikApi = {
     ipcRenderer.send('flik:open-folder', folderPath);
   },
 
+  // Opens file in default Windows viewer
+  openFile: (filePath: string) => {
+    ipcRenderer.send('flik:open-file', filePath);
+  },
+
+  // Highlights and selects file in File Explorer
+  showInFolder: (filePath: string) => {
+    ipcRenderer.send('flik:show-in-folder', filePath);
+  },
+
   // Prompts native folder picker to save stacked cards into a permanent folder
   saveFilesToFolder: async (filePaths: string[]): Promise<boolean> => {
     return await ipcRenderer.invoke('flik:save-files-to-folder', filePaths);
@@ -63,8 +73,13 @@ const flikApi = {
   },
 
   // Prompts file picker to send files to an Android phone
-  promptSendFiles: async (peerDeviceId: string): Promise<boolean> => {
+  promptSendFiles: async (peerDeviceId?: string): Promise<boolean> => {
     return await ipcRenderer.invoke('flik:prompt-send-files', peerDeviceId);
+  },
+
+  // Sends dropped files to target phone
+  sendDroppedFiles: async (filePaths: string[], peerDeviceId?: string): Promise<boolean> => {
+    return await ipcRenderer.invoke('flik:send-dropped-files', { filePaths, peerDeviceId });
   },
 
   // Fetches local system status, IPv4, bound port, and QR pairing string

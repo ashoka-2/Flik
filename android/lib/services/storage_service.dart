@@ -3,12 +3,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/history_entry.dart';
 
-// Manages local preferences, device identity, paired tokens, and transfer history.
+// Manages local preferences, device identity, paired tokens, receive folder, and transfer history.
 class StorageService {
   static const _keyDeviceId = 'flik_device_id';
   static const _keyDeviceName = 'flik_device_name';
   static const _keyTokens = 'flik_paired_tokens';
   static const _keyHistory = 'flik_transfer_history';
+  static const _keyReceivePath = 'flik_receive_folder_path';
+  static const _keyRetentionHours = 'flik_history_retention_hours';
 
   final SharedPreferences _prefs;
 
@@ -34,6 +36,26 @@ class StorageService {
 
   Future<void> setDeviceName(String name) async {
     await _prefs.setString(_keyDeviceName, name.trim());
+  }
+
+  String? getReceivePath() {
+    return _prefs.getString(_keyReceivePath);
+  }
+
+  Future<void> setReceivePath(String? path) async {
+    if (path == null) {
+      await _prefs.remove(_keyReceivePath);
+    } else {
+      await _prefs.setString(_keyReceivePath, path.trim());
+    }
+  }
+
+  int getHistoryRetentionHours() {
+    return _prefs.getInt(_keyRetentionHours) ?? 168; // Default 7 days (168h), -1 for forever
+  }
+
+  Future<void> setHistoryRetentionHours(int hours) async {
+    await _prefs.setInt(_keyRetentionHours, hours);
   }
 
   String? getToken(String peerDeviceId) {
@@ -72,21 +94,32 @@ class StorageService {
   List<TransferHistoryEntry> getHistory() {
     final raw = _prefs.getStringList(_keyHistory);
     if (raw == null) return [];
-    return raw.map((e) {
+
+    final retentionHours = getHistoryRetentionHours();
+    final cutoff = retentionHours > 0 ? DateTime.now().subtract(Duration(hours: retentionHours)) : null;
+
+    final entries = <TransferHistoryEntry>[];
+    for (final e in raw) {
       try {
-        return TransferHistoryEntry.fromJson(jsonDecode(e) as Map<String, dynamic>);
-      } catch (_) {
-        return null;
-      }
-    }).whereType<TransferHistoryEntry>().toList();
+        final entry = TransferHistoryEntry.fromJson(jsonDecode(e) as Map<String, dynamic>);
+        if (cutoff == null || entry.timestamp.isAfter(cutoff)) {
+          entries.add(entry);
+        }
+      } catch (_) {}
+    }
+    return entries;
   }
 
   Future<void> addHistoryEntry(TransferHistoryEntry entry) async {
     final list = getHistory();
     list.insert(0, entry);
-    // Keep max 50 entries
-    final trimmed = list.take(50).toList();
+    // Keep max 100 entries
+    final trimmed = list.take(100).toList();
     final jsonList = trimmed.map((e) => jsonEncode(e.toJson())).toList();
     await _prefs.setStringList(_keyHistory, jsonList);
+  }
+
+  Future<void> clearHistory() async {
+    await _prefs.remove(_keyHistory);
   }
 }

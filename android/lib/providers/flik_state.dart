@@ -294,6 +294,8 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
             timestamp: DateTime.now(),
             summaryName: items.first.name,
             status: 'completed',
+            localPath: items.first.localPath,
+            kind: items.first.kind,
           ),
         );
       }
@@ -354,6 +356,8 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
             timestamp: DateTime.now(),
             summaryName: state.stagedItems.first.name,
             status: 'completed',
+            localPath: state.stagedItems.first.localPath,
+            kind: state.stagedItems.first.kind,
           ),
         );
         clearStaging();

@@ -17,6 +17,7 @@ export const TrayWindow: React.FC = () => {
   const [peers, setPeers] = useState<any[]>([]);
   const [editingName, setEditingName] = useState<boolean>(false);
   const [deviceName, setDeviceName] = useState<string>('');
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -236,7 +237,51 @@ export const TrayWindow: React.FC = () => {
         </div>
       </div>
 
-      <div className="tray-controls" style={{ marginTop: 12 }}>
+      {/* Desktop Dropzone for Drag-and-Drop and Multi-file Sending to Phone */}
+      <div
+        style={{
+          marginTop: 10,
+          padding: '14px 12px',
+          borderRadius: 12,
+          border: isDragOver ? '2px dashed var(--accent)' : '1px dashed var(--line)',
+          background: isDragOver ? 'rgba(53, 102, 239, 0.15)' : 'var(--raised)',
+          cursor: 'pointer',
+          textAlign: 'center',
+          transition: 'all 150ms ease',
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+            const paths: string[] = [];
+            for (let i = 0; i < e.dataTransfer.files.length; i++) {
+              const file = e.dataTransfer.files[i];
+              if ((file as any).path) paths.push((file as any).path);
+            }
+            if (paths.length > 0) {
+              window.flik?.sendDroppedFiles(paths, peers[0]?.deviceId);
+            }
+          }
+        }}
+        onClick={handleSendToPhone}
+      >
+        <div style={{ fontSize: 20, marginBottom: 2 }}>📥</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+          {isDragOver ? 'Drop files here!' : 'Drop files or click to send to phone'}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+          {peers.length > 0
+            ? `Ready to stream to ${peers[0].deviceName}`
+            : 'Open Flik on phone to connect'}
+        </div>
+      </div>
+
+      <div className="tray-controls" style={{ marginTop: 10 }}>
         <button
           className="btn-pill primary"
           style={{ width: '100%' }}

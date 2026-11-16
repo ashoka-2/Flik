@@ -369,17 +369,21 @@ export class FlikReceiverServer extends EventEmitter {
 
           if (meta && savedItems.length > 0) {
             const traj = typeof meta.trajectoryX === 'number' ? meta.trajectoryX : 0;
-            const card: ActiveTransferCard = {
-              id: meta.transferId,
-              senderName,
-              senderDeviceId: senderId,
-              items: savedItems,
-              x: 100,
-              y: 100,
-              trajectoryX: traj,
-              createdAt: Date.now(),
-            };
-            this.emit('transfer-received', card);
+            // Emit separate floating media cards for each transferred item so all photos appear on desktop
+            for (let i = 0; i < savedItems.length; i++) {
+              const item = savedItems[i];
+              const card: ActiveTransferCard = {
+                id: `${meta.transferId}-${i}`,
+                senderName,
+                senderDeviceId: senderId,
+                items: [item],
+                x: 100 + (i * 40),
+                y: 100 + (i * 25),
+                trajectoryX: traj + (i * 0.10) - ((savedItems.length - 1) * 0.05),
+                createdAt: Date.now() + i,
+              };
+              this.emit('transfer-received', card);
+            }
             res.status(200).json({ status: 'completed', transferId: meta.transferId });
           } else {
             res.status(400).json({ error: 'No items received' });

@@ -24,6 +24,7 @@ import { FlikMdnsService } from './mdns';
 import { InteractiveRect, ActiveTransferCard } from '../shared/types';
 import { FLIK_CONSTANTS, NORMALIZED_ERRORS } from '../shared/constants';
 import { validateUrl } from '../shared/sanitizer';
+import { sendFilesToPeer } from './client';
 
 // Register custom privileged scheme for loading local media thumbnails in cards
 protocol.registerSchemesAsPrivileged([
@@ -525,13 +526,43 @@ class FlikConnectorApp {
       }
     });
 
-    // Reads local image file into base64 data URL as bulletproof renderer fallback
+    // Opens a file directly with default Windows application (Photos, Media Player, etc.)
+    ipcMain.on('flik:open-file', (_event, filePath: string) => {
+      if (fs.existsSync(filePath)) {
+        shell.openPath(filePath);
+      }
+    });
+
+    // Highlights and selects a file in Windows File Explorer
+    ipcMain.on('flik:show-in-folder', (_event, filePath: string) => {
+      if (fs.existsSync(filePath)) {
+        shell.showItemInFolder(filePath);
+      }
+    });
+
+    // Reads local image file into base64 data URL with automatic HEIC/HEIF decoding
     ipcMain.handle('flik:read-media-data-url', async (_event, filePath: string) => {
       try {
         if (filePath && fs.existsSync(filePath)) {
-          const buf = await fs.promises.readFile(filePath);
           const ext = path.extname(filePath).toLowerCase();
-          const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+          const buf = await fs.promises.readFile(filePath);
+
+          // Convert Apple HEIC/HEIF to JPEG on the fly
+          if (ext === '.heic' || ext === '.heif') {
+            try {
+              const heicConvert = require('heic-convert');
+              const outputBuffer = await heicConvert({
+                buffer: buf,
+                format: 'JPEG',
+                quality: 0.92,
+              });
+              return `data:image/jpeg;base64,${Buffer.from(outputBuffer).toString('base64')}`;
+            } catch (convErr) {
+              console.error('HEIC conversion error:', convErr);
+            }
+          }
+
+          const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
           return `data:${mime};base64,${buf.toString('base64')}`;
         }
       } catch (e) {
@@ -605,6 +636,58 @@ class FlikConnectorApp {
 
     ipcMain.handle('flik:get-start-with-windows', () => {
       return this.store.getStartWithWindows();
+    });
+
+    // Prompts native multi-file dialog and streams files to connected phone
+    ipcMain.handle('flik:prompt-send-files', async (_event, peerDeviceId?: string) => {
+      const peers = this.mdns.getDiscoveredPeers();
+      if (peers.length === 0) {
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'No Phone Connected',
+          message: 'No Flik devices were found on your Wi-Fi network. Open Flik on your phone and tap Receive.',
+        });
+        return false;
+      }
+
+      const target = peerDeviceId ? peers.find((p) => p.deviceId === peerDeviceId) || peers[0] : peers[0];
+
+      const result = await dialog.showOpenDialog({
+        title: `Select Files to Send to ${target.deviceName}`,
+        properties: ['openFile', 'multiSelections'],
+      });
+
+      if (result.canceled || !result.filePaths.length) return false;
+
+      this.broadcastToOverlays('flik:toast', `Sending ${result.filePaths.length} file(s) to ${target.deviceName}...`);
+      const outcome = await sendFilesToPeer(target, result.filePaths, this.store);
+      if (outcome.success) {
+        this.broadcastToOverlays('flik:toast', `Successfully sent to ${target.deviceName}!`);
+        return true;
+      } else {
+        this.broadcastToOverlays('flik:toast', outcome.error || 'Failed to send');
+        return false;
+      }
+    });
+
+    // Streams dropped files from the desktop Dropbox to the connected phone
+    ipcMain.handle('flik:send-dropped-files', async (_event, { filePaths, peerDeviceId }: { filePaths: string[]; peerDeviceId?: string }) => {
+      const peers = this.mdns.getDiscoveredPeers();
+      if (peers.length === 0) {
+        this.broadcastToOverlays('flik:toast', 'No phone connected to receive dropped files.');
+        return false;
+      }
+      const target = peerDeviceId ? peers.find((p) => p.deviceId === peerDeviceId) || peers[0] : peers[0];
+
+      this.broadcastToOverlays('flik:toast', `Sending ${filePaths.length} dropped file(s) to ${target.deviceName}...`);
+      const outcome = await sendFilesToPeer(target, filePaths, this.store);
+      if (outcome.success) {
+        this.broadcastToOverlays('flik:toast', `Delivered to ${target.deviceName}!`);
+        return true;
+      } else {
+        this.broadcastToOverlays('flik:toast', outcome.error || 'Failed sending dropped files');
+        return false;
+      }
     });
   }
 
