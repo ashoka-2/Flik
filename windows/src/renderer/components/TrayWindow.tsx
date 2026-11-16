@@ -342,7 +342,10 @@ export const TrayWindow: React.FC = () => {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             cursor: 'pointer',
-            textDecoration: 'underline dotted',
+            padding: '4px 6px',
+            borderRadius: 6,
+            background: 'var(--raised)',
+            border: '1px solid var(--line)',
           }}
           title={storagePath ? `${storagePath} (Click to open)` : 'Click to select folder'}
           onClick={() => {

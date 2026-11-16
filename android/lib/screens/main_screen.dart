@@ -60,29 +60,31 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final notifier = ref.read(flikAppProvider.notifier);
     final state = ref.read(flikAppProvider);
 
-    // 1. Process shared Web URL (e.g. from Chrome, Edge, Brave)
+    // 1. Process shared Web URL (e.g. from Chrome, Edge, Brave, YouTube, Instagram reels/posts)
     if (media.content != null && media.content!.trim().isNotEmpty) {
       final text = media.content!.trim();
-      final uri = Uri.tryParse(text);
+      final urlMatch = RegExp(r'https?://[^\s]+').firstMatch(text);
+      final rawUrl = urlMatch != null ? urlMatch.group(0)! : text;
+      final uri = Uri.tryParse(rawUrl);
       final isUrl = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
 
       if (isUrl) {
         if (state.peers.isNotEmpty) {
           notifier.showToast('Sending link to ${state.peers.first.deviceName}...');
-          await notifier.sendUrl(text, title: 'Shared Link');
+          await notifier.sendUrl(rawUrl, title: 'Shared Link');
         } else {
           notifier.stageItems([
             TransferItem(
               id: const Uuid().v4(),
-              name: text,
-              size: text.length,
+              name: rawUrl,
+              size: rawUrl.length,
               mime: 'text/uri-list',
               kind: 'file',
-              url: text,
+              url: rawUrl,
             ),
           ]);
-          setState(() => _currentTabIndex = 3); // Links tab
-          notifier.showToast('Link saved in Links. Connect to PC to open.');
+          setState(() => _currentTabIndex = 2); // Files & Links tab
+          notifier.showToast('No PC connected. Link staged in Files & Links!');
         }
       }
     }

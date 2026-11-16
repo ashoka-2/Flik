@@ -14,7 +14,14 @@ export async function sendFilesToPeer(
       return { success: false, error: 'No valid files selected' };
     }
 
-    const token = store.getTrustedDevice(peer.deviceId)?.token || 'default';
+    let token = store.getTrustedDevice(peer.deviceId)?.token;
+    if (!token) {
+      const allTrusted = store.getTrustedDevices();
+      if (allTrusted.length > 0) {
+        token = allTrusted[allTrusted.length - 1].token;
+      }
+    }
+    if (!token) token = 'default';
     const formData = new FormData();
     const itemsMeta: { name: string; size: number; mime: string; kind: 'file' | 'image' | 'video' }[] = [];
 

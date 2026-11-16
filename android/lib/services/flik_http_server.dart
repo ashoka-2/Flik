@@ -156,7 +156,9 @@ class FlikHttpServer {
       }
       final token = authHeader.substring(7).trim();
       final expectedToken = storage.getToken(senderId);
-      if (expectedToken == null || !_constantTimeCompare(token, expectedToken)) {
+      final isAuth = (expectedToken != null && _constantTimeCompare(token, expectedToken)) ||
+          storage.isValidToken(token);
+      if (!isAuth) {
         return Response(401, body: jsonEncode({'error': 'Invalid token'}));
       }
 
@@ -280,7 +282,9 @@ class FlikHttpServer {
       }
       final token = auth.substring(7).trim();
       final expected = storage.getToken(senderId);
-      if (expected == null || !_constantTimeCompare(token, expected)) {
+      final isAuth = (expected != null && _constantTimeCompare(token, expected)) ||
+          storage.isValidToken(token);
+      if (!isAuth) {
         return Response(401, body: jsonEncode({'error': 'Invalid token'}));
       }
 

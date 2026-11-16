@@ -8,7 +8,8 @@ interface TransferCardProps {
 }
 
 // Pure floating media component with Apple-grade fluid animations, native drag-out,
-// full audio player with controls, video with full-screen escape handling,
+// minimal-ai-ui styled audio player with controls, video with reliable theater maximize/minimize escape handling,
+// resilient image rendering with automatic HEIC decoding & graceful fallback,
 // left-click open, right-click reveal in File Explorer, and zero broken image placeholders.
 export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChange, onDismiss }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -20,48 +21,51 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
 
   const firstItem = card.items[0];
   const [imgSrc, setImgSrc] = useState<string>('');
+  const [imgError, setImgError] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isExpandedVideo, setIsExpandedVideo] = useState<boolean>(false);
 
   const ext = firstItem?.name ? firstItem.name.split('.').pop()?.toLowerCase() : '';
-  const isVideo = firstItem?.kind === 'video' || firstItem?.mime?.startsWith('video/') || ['mp4', 'mkv', 'mov', 'avi', 'webm'].includes(ext || '');
-  const isAudio = firstItem?.kind === 'audio' || firstItem?.mime?.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg'].includes(ext || '');
+  const isVideo = firstItem?.kind === 'video' || firstItem?.mime?.startsWith('video/') || ['mp4', 'mkv', 'mov', 'avi', 'webm', '3gp'].includes(ext || '');
+  const isAudio = firstItem?.kind === 'audio' || firstItem?.mime?.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus'].includes(ext || '');
   const isImage = firstItem?.kind === 'image' || firstItem?.mime?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif'].includes(ext || '');
 
   useEffect(() => {
     let isMounted = true;
     if (firstItem?.localPath && isImage) {
       window.flik?.readMediaDataUrl?.(firstItem.localPath).then((dataUrl) => {
-        if (isMounted && dataUrl) {
-          setImgSrc(dataUrl);
+        if (isMounted) {
+          if (dataUrl) {
+            setImgSrc(dataUrl);
+            setImgError(false);
+          } else if (ext === 'heic' || ext === 'heif') {
+            setImgError(true);
+          }
         }
+      }).catch(() => {
+        if (isMounted) setImgError(true);
       });
     }
 
     const handleEscKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (isExpandedVideo) {
+          setIsExpandedVideo(false);
+        }
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => {});
         }
-        setIsFullscreen(false);
       }
     };
 
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('keydown', handleEscKey);
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-
+    window.addEventListener('keydown', handleEscKey);
     return () => {
       isMounted = false;
-      document.removeEventListener('keydown', handleEscKey);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleEscKey);
     };
-  }, [firstItem?.localPath, isImage]);
+  }, [firstItem?.localPath, isImage, isExpandedVideo, ext]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'INPUT') return;
@@ -93,8 +97,8 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
 
   const handleClick = (e: React.MouseEvent) => {
     if (dragMoved.current) return;
-    // Don't open if clicked control buttons
-    if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'INPUT') return;
+    // Don't open if clicked interactive control buttons
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).tagName === 'INPUT') return;
     if (firstItem?.localPath && !isAudio && !isVideo) {
       window.flik?.openFile(firstItem.localPath);
     }
@@ -116,17 +120,10 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
     }
   };
 
-  // Video full screen toggle
-  const toggleVideoFullscreen = () => {
-    if (videoRef.current) {
-      if (!document.fullscreenElement) {
-        videoRef.current.requestFullscreen().catch(() => {});
-        setIsFullscreen(true);
-      } else {
-        document.exitFullscreen().catch(() => {});
-        setIsFullscreen(false);
-      }
-    }
+  // Video expand / theater toggle
+  const toggleVideoExpand = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setIsExpandedVideo((prev) => !prev);
   };
 
   // Audio Playback Controls
@@ -154,279 +151,475 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
     if (isNaN(seconds) || seconds <= 0) return '0:00';
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padLeft ? s.toString().padStart(2, '0') : (s < 10 ? '0' + s : s)}`;
+    return `${m}:${s < 10 ? '0' + s : s}`;
   };
 
   const mediaUrl = imgSrc || (firstItem?.localPath ? `http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}` : '');
 
   return (
-    <div
-      ref={cardRef}
-      className="flik-floating-media interactive flying-in"
-      data-interactive="true"
-      style={{
-        left: `${card.x}px`,
-        top: `${card.y}px`,
-      }}
-      draggable
-      onDragStart={handleDragStart}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onClick={handleClick}
-      onContextMenu={handleContextMenu}
-      title={`${firstItem?.name || 'Media'} (Right-click to show in folder)`}
-    >
-      {/* 1. Video Player with Fullscreen / Minimize Controls */}
-      {isVideo && firstItem?.localPath && (
-        <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000' }}>
-          <video
-            ref={videoRef}
-            src={mediaUrl}
-            controls
-            autoPlay
-            muted
-            className="media-content"
-            onDoubleClick={toggleVideoFullscreen}
-          />
-          {isFullscreen && (
+    <>
+      {/* Expanded Theater Video View */}
+      {isExpandedVideo && isVideo && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 99999,
+            backgroundColor: 'rgba(0, 0, 0, 0.92)',
+            backdropFilter: 'blur(16px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+          onClick={() => setIsExpandedVideo(false)}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 20,
+              right: 24,
+              display: 'flex',
+              gap: 12,
+              zIndex: 100000,
+            }}
+          >
             <button
+              onClick={toggleVideoExpand}
               style={{
-                position: 'fixed',
-                top: 24,
-                right: 24,
-                zIndex: 9999,
-                background: 'rgba(0, 0, 0, 0.75)',
+                background: 'rgba(255, 255, 255, 0.15)',
                 color: '#fff',
-                border: '1px solid rgba(255, 255, 255, 0.4)',
-                borderRadius: 24,
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: 999,
                 padding: '8px 18px',
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 600,
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
               }}
-              onClick={toggleVideoFullscreen}
             >
-              ⤢ Exit Fullscreen (Esc)
+              ⤢ Minimize (Esc)
             </button>
-          )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsExpandedVideo(false);
+                onDismiss(card.id);
+              }}
+              style={{
+                background: 'rgba(239, 68, 68, 0.8)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: 36,
+                height: 36,
+                fontSize: 16,
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+              title="Close"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div
+            style={{
+              maxWidth: '92vw',
+              maxHeight: '84vh',
+              borderRadius: 16,
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <video
+              src={mediaUrl}
+              controls
+              autoPlay
+              style={{
+                maxWidth: '92vw',
+                maxHeight: '84vh',
+                display: 'block',
+                borderRadius: 16,
+              }}
+            />
+          </div>
         </div>
       )}
 
-      {/* 2. Audio Player with Album Artwork, Play/Pause, Rewind, Fast-Forward & Progress */}
-      {isAudio && firstItem?.localPath && (
-        <div
-          style={{
-            width: 320,
-            padding: 16,
-            background: 'linear-gradient(135deg, #181920 0%, #111216 100%)',
-            borderRadius: 18,
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            boxShadow: '0 20px 48px rgba(0, 0, 0, 0.65)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-            color: '#fff',
-          }}
-        >
-          <audio
-            ref={audioRef}
-            src={mediaUrl}
-            onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-            onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)}
-            onEnded={() => setIsPlaying(false)}
-          />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div
+      {/* Normal Floating Card */}
+      <div
+        ref={cardRef}
+        className="flik-floating-media interactive flying-in"
+        data-interactive="true"
+        style={{
+          left: `${card.x}px`,
+          top: `${card.y}px`,
+        }}
+        draggable
+        onDragStart={handleDragStart}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+        title={`${firstItem?.name || 'Media'} (Right-click to show in folder)`}
+      >
+        {/* 1. Video Player with Theater Expand / Fullscreen & Play Controls */}
+        {isVideo && firstItem?.localPath && (
+          <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000', borderRadius: 18, overflow: 'hidden' }}>
+            <video
+              ref={videoRef}
+              src={mediaUrl}
+              controls
+              autoPlay
+              muted
+              className="media-content"
+              onDoubleClick={toggleVideoExpand}
+            />
+            <button
               style={{
-                width: 52,
-                height: 52,
-                borderRadius: 12,
-                background: 'linear-gradient(135deg, #3566EF 0%, #8b5cf6 100%)',
+                position: 'absolute',
+                top: 8,
+                left: 8,
+                zIndex: 10,
+                background: 'rgba(0, 0, 0, 0.65)',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: 999,
+                padding: '4px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              onClick={toggleVideoExpand}
+              title="Expand to Theater View"
+            >
+              ⤢ Expand
+            </button>
+          </div>
+        )}
+
+        {/* 2. Audio Player conforming to minimal-ai-ui (neutral surfaces, #3566EF accent, pill geometry) */}
+        {isAudio && firstItem?.localPath && (
+          <div
+            style={{
+              width: 310,
+              padding: 16,
+              background: '#151515',
+              borderRadius: 20,
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.65)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              color: '#fff',
+            }}
+          >
+            <audio
+              ref={audioRef}
+              src={mediaUrl}
+              onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+              onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration)}
+              onEnded={() => setIsPlaying(false)}
+            />
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  background: 'rgba(53, 102, 239, 0.15)',
+                  border: '1px solid rgba(53, 102, 239, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 22,
+                }}
+              >
+                🎵
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {firstItem.name}
+                </div>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                  Audio Track • {(firstItem.size / (1024 * 1024)).toFixed(1)} MB
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Slider */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <input
+                type="range"
+                min={0}
+                max={duration || 100}
+                value={currentTime}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setCurrentTime(val);
+                  if (audioRef.current) audioRef.current.currentTime = val;
+                }}
+                style={{
+                  width: '100%',
+                  height: 4,
+                  accentColor: '#3566EF',
+                  cursor: 'pointer',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#888' }}>
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+            </div>
+
+            {/* Minimal AI UI Audio Controls (Pill Geometry) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+              <button
+                onClick={(e) => seekAudio(-5, e)}
+                style={{
+                  background: '#20201E',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 999,
+                  width: 32,
+                  height: 32,
+                  color: '#fff',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Rewind 5s"
+              >
+                ⏮
+              </button>
+              <button
+                onClick={toggleAudioPlay}
+                style={{
+                  background: '#3566EF',
+                  border: 'none',
+                  borderRadius: 999,
+                  width: 42,
+                  height: 42,
+                  color: '#fff',
+                  fontSize: 16,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 4px 14px rgba(53, 102, 239, 0.45)',
+                }}
+                title={isPlaying ? 'Pause' : 'Play'}
+              >
+                {isPlaying ? '⏸' : '▶'}
+              </button>
+              <button
+                onClick={(e) => seekAudio(5, e)}
+                style={{
+                  background: '#20201E',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 999,
+                  width: 32,
+                  height: 32,
+                  color: '#fff',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                title="Fast Forward 5s"
+              >
+                ⏭
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 3. Photo / Image View - Resilient with HEIC conversion and Fallback */}
+        {isImage && !imgError && (
+          <img
+            src={mediaUrl}
+            alt={firstItem?.name || 'Photo'}
+            className="media-content"
+            onError={async () => {
+              if (firstItem?.localPath && window.flik?.readMediaDataUrl) {
+                try {
+                  const url = await window.flik.readMediaDataUrl(firstItem.localPath);
+                  if (url) {
+                    setImgSrc(url);
+                    setImgError(false);
+                    return;
+                  }
+                } catch {}
+              }
+              setImgError(true);
+            }}
+          />
+        )}
+
+        {/* 3b. Fallback Card if Image Failed or is HEIC not decoded in browser */}
+        {isImage && imgError && (
+          <div
+            style={{
+              width: 280,
+              padding: 16,
+              background: '#151515',
+              borderRadius: 18,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.65)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+            onClick={() => firstItem?.localPath && window.flik?.openFile(firstItem.localPath)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 12,
+                  background: 'rgba(53, 102, 239, 0.15)',
+                  border: '1px solid rgba(53, 102, 239, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 22,
+                }}
+              >
+                🖼️
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {firstItem?.name || 'Image'}
+                </div>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                  {firstItem?.size ? `${(firstItem.size / (1024 * 1024)).toFixed(1)} MB • ` : ''}
+                  {ext.toUpperCase()} Image
+                </div>
+              </div>
+            </div>
+
+            <button
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: 999,
+                background: '#3566EF',
+                border: 'none',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 24,
-                boxShadow: '0 8px 16px rgba(53, 102, 239, 0.35)',
+                gap: 6,
+                boxShadow: '0 4px 12px rgba(53, 102, 239, 0.35)',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (firstItem?.localPath) window.flik?.openFile(firstItem.localPath);
               }}
             >
-              🎵
+              <span>👁️</span> Click to view in Photos
+            </button>
+          </div>
+        )}
+
+        {/* 4. Generic Document / File Card */}
+        {!isVideo && !isAudio && !isImage && (
+          <div
+            style={{
+              width: 280,
+              padding: 16,
+              background: '#151515',
+              borderRadius: 18,
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.55)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              color: '#fff',
+              cursor: 'pointer',
+            }}
+            onClick={() => firstItem?.localPath && window.flik?.openFile(firstItem.localPath)}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 10,
+                background: '#20201E',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
+              }}
+            >
+              📄
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: 600,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                 }}
               >
-                {firstItem.name}
+                {firstItem?.name || 'File'}
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                Audio Track • {(firstItem.size / (1024 * 1024)).toFixed(1)} MB
+              <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                {firstItem?.size ? `${(firstItem.size / (1024 * 1024)).toFixed(1)} MB` : 'Received File'}
               </div>
             </div>
           </div>
+        )}
 
-          {/* Progress Slider */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              value={currentTime}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                setCurrentTime(val);
-                if (audioRef.current) audioRef.current.currentTime = val;
-              }}
-              style={{
-                width: '100%',
-                height: 4,
-                accentColor: 'var(--accent)',
-                cursor: 'pointer',
-              }}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8' }}>
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration)}</span>
-            </div>
-          </div>
-
-          {/* Audio Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-            <button
-              onClick={(e) => seekAudio(-5, e)}
-              style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: 'none',
-                borderRadius: '50%',
-                width: 32,
-                height: 32,
-                color: '#fff',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
-              title="Rewind 5s"
-            >
-              ⏮
-            </button>
-            <button
-              onClick={toggleAudioPlay}
-              style={{
-                background: 'var(--accent)',
-                border: 'none',
-                borderRadius: '50%',
-                width: 44,
-                height: 44,
-                color: '#fff',
-                fontSize: 18,
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(53, 102, 239, 0.4)',
-              }}
-              title={isPlaying ? 'Pause' : 'Play'}
-            >
-              {isPlaying ? '⏸' : '▶'}
-            </button>
-            <button
-              onClick={(e) => seekAudio(5, e)}
-              style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: 'none',
-                borderRadius: '50%',
-                width: 32,
-                height: 32,
-                color: '#fff',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
-              title="Fast Forward 5s"
-            >
-              ⏭
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Photo / Image View */}
-      {isImage && (
-        <img
-          src={mediaUrl}
-          alt={firstItem?.name || 'Photo'}
-          className="media-content"
-          onError={async () => {
-            if (firstItem?.localPath && window.flik?.readMediaDataUrl) {
-              const url = await window.flik.readMediaDataUrl(firstItem.localPath);
-              if (url) setImgSrc(url);
-            }
-          }}
-        />
-      )}
-
-      {/* 4. Generic Document / File Card */}
-      {!isVideo && !isAudio && !isImage && (
-        <div
-          style={{
-            width: 280,
-            padding: 16,
-            background: 'var(--surface)',
-            borderRadius: 18,
-            border: '1px solid var(--line)',
-            boxShadow: '0 20px 48px rgba(0, 0, 0, 0.55)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            color: '#fff',
+        {/* Floating subtle dismiss button on hover */}
+        <button
+          className="floating-dismiss-btn"
+          title="Dismiss from screen"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDismiss(card.id);
           }}
         >
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 10,
-              background: 'var(--raised)',
-              border: '1px solid var(--line)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 20,
-            }}
-          >
-            📄
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {firstItem?.name || 'File'}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-              {firstItem?.size ? `${(firstItem.size / (1024 * 1024)).toFixed(1)} MB` : 'Received File'}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Floating subtle dismiss button on hover */}
-      <button
-        className="floating-dismiss-btn"
-        title="Dismiss from screen"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDismiss(card.id);
-        }}
-      >
-        ✕
-      </button>
-    </div>
+          ✕
+        </button>
+      </div>
+    </>
   );
 };

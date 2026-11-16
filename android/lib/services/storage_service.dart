@@ -69,6 +69,18 @@ class StorageService {
     }
   }
 
+  bool isValidToken(String token) {
+    if (token.isEmpty) return false;
+    final raw = _prefs.getString(_keyTokens);
+    if (raw == null) return false;
+    try {
+      final map = jsonDecode(raw) as Map<String, dynamic>;
+      return map.values.any((v) => v.toString() == token);
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> saveToken(String peerDeviceId, String token) async {
     final raw = _prefs.getString(_keyTokens);
     Map<String, dynamic> map = {};

@@ -72,13 +72,20 @@ class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingOb
       _controller = MobileScannerController(
         formats: const [BarcodeFormat.qrCode],
         detectionSpeed: DetectionSpeed.noDuplicates,
-        autoStart: true,
+        autoStart: false,
       );
 
       if (mounted) {
         setState(() {
           _hasPermission = true;
           _isChecking = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          try {
+            _controller?.start();
+          } catch (e) {
+            debugPrint('Controller start error: $e');
+          }
         });
       }
     } catch (e) {
@@ -95,11 +102,27 @@ class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingOb
     setState(() => _isChecking = true);
     try {
       await _controller?.stop();
-      _controller?.dispose();
     } catch (_) {}
-    _controller = null;
-    await Future.delayed(const Duration(milliseconds: 250));
-    await _checkPermissionAndInit();
+    await Future.delayed(const Duration(milliseconds: 350));
+    try {
+      await _controller?.start();
+      if (mounted) setState(() => _isChecking = false);
+    } catch (_) {
+      try {
+        _controller?.dispose();
+        _controller = MobileScannerController(
+          formats: const [BarcodeFormat.qrCode],
+          detectionSpeed: DetectionSpeed.noDuplicates,
+          autoStart: false,
+        );
+        if (mounted) setState(() => _isChecking = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _controller?.start().catchError((_) {});
+        });
+      } catch (_) {
+        if (mounted) setState(() => _isChecking = false);
+      }
+    }
   }
 
   void _onDetect(BarcodeCapture capture) async {
@@ -166,7 +189,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingOb
   }
 
   void _showManualIpDialog() {
-    final ipController = TextEditingController(text: '10.223.187.101');
+    final defaultIp = widget.pool.currentPeers.isNotEmpty
+        ? widget.pool.currentPeers.first.ip
+        : '';
+    final ipController = TextEditingController(text: defaultIp);
     final portController = TextEditingController(text: '54321');
 
     showDialog(
@@ -370,6 +396,29 @@ class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingOb
                       label: const Text('Enter PC IP Directly'),
                       style: TextButton.styleFrom(foregroundColor: FlikTokens.accentSoft),
                     ),
+                    if (widget.pool.currentPeers.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        children: widget.pool.currentPeers.map((peer) {
+                          return ActionChip(
+                            avatar: const Icon(Icons.laptop, size: 14, color: FlikTokens.accentSoft),
+                            label: Text(
+                              'Connect to ${peer.deviceName}',
+                              style: const TextStyle(fontSize: 12, color: FlikTokens.text),
+                            ),
+                            backgroundColor: FlikTokens.raised,
+                            side: const BorderSide(color: FlikTokens.line),
+                            onPressed: () async {
+                              final nav = Navigator.of(context);
+                              widget.onToast('Connecting to ${peer.deviceName}...');
+                              final ok = await widget.pool.addManualDevice(peer.ip, peer.port);
+                              if (ok && mounted) nav.pop(true);
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),

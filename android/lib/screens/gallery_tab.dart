@@ -128,9 +128,9 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
         final others = <AssetPathEntity>[];
 
         for (final album in commonAlbums) {
-          final name = album.name.toLowerCase();
-          if (album.isAll) {
-            foundAll = album;
+          final name = album.name.trim().toLowerCase();
+          if (album.isAll || name == 'all' || name == 'recent' || name == 'recents' || name == 'all photos' || name == 'recent photos') {
+            foundAll ??= album;
           } else if (name == 'camera' || name == 'dcim' || name.contains('camera')) {
             final count = await album.assetCountAsync;
             if (count > maxCameraCount) {
@@ -152,6 +152,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
             others.add(album);
           }
         }
+
+        others.removeWhere((a) => a.isAll || ['all', 'recent', 'recents', 'all photos', 'recent photos'].contains(a.name.trim().toLowerCase()));
 
         // Guarantee dedicated full-device Videos album if available
         if (videoAlbums.isNotEmpty) {
@@ -215,9 +217,17 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
   void _applySort(List<AssetEntity> list) {
     if (_sortLatestFirst) {
-      list.sort((a, b) => b.createDateTime.compareTo(a.createDateTime));
+      list.sort((a, b) {
+        final timeA = a.modifiedDateTime.isAfter(a.createDateTime) ? a.modifiedDateTime : a.createDateTime;
+        final timeB = b.modifiedDateTime.isAfter(b.createDateTime) ? b.modifiedDateTime : b.createDateTime;
+        return timeB.compareTo(timeA);
+      });
     } else {
-      list.sort((a, b) => a.createDateTime.compareTo(b.createDateTime));
+      list.sort((a, b) {
+        final timeA = a.modifiedDateTime.isAfter(a.createDateTime) ? a.modifiedDateTime : a.createDateTime;
+        final timeB = b.modifiedDateTime.isAfter(b.createDateTime) ? b.modifiedDateTime : b.createDateTime;
+        return timeA.compareTo(timeB);
+      });
     }
   }
 
@@ -226,6 +236,28 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
       _sortLatestFirst = !_sortLatestFirst;
       _applySort(_assets);
     });
+  }
+
+  Future<void> _reloadCurrentView() async {
+    PhotoManager.clearFileCache();
+    if (_isAlbumsView) {
+      await _loadAlbums();
+    } else {
+      if (_selectedAlbum != null) {
+        final list = await _selectedAlbum!.getAssetListPaged(page: 0, size: _pageSize);
+        _applySort(list);
+        if (mounted) {
+          setState(() {
+            _assets = list;
+            _currentPage = 0;
+            _hasMore = list.length >= _pageSize;
+            _isLoading = false;
+          });
+        }
+      } else {
+        await _loadAlbums();
+      }
+    }
   }
 
   Future<void> _switchAlbum(AssetPathEntity album) async {
@@ -490,6 +522,27 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
                     ),
                   ),
                 ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: _reloadCurrentView,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: FlikTokens.raised,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: FlikTokens.line),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh, size: 13, color: FlikTokens.accentSoft),
+                      SizedBox(width: 4),
+                      Text('Reload', style: TextStyle(fontSize: 11, color: FlikTokens.text, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ],
@@ -538,9 +591,14 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
         ? _moreAlbums
         : _moreAlbums.where((a) => a.name.toLowerCase().contains(_searchQuery)).toList();
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      children: [
+    return RefreshIndicator(
+      onRefresh: _reloadCurrentView,
+      color: FlikTokens.accentSoft,
+      backgroundColor: FlikTokens.surface,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        children: [
         // Primary Top Albums (Row 1: All, Camera, Favorites | Row 2: Videos, Screenshots)
         if (filteredPrimary.isNotEmpty)
           GridView.builder(
@@ -589,8 +647,9 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
           ),
         ],
       ],
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildAlbumCard(AssetPathEntity album) {
     final count = _albumCounts[album.id] ?? 0;
@@ -680,20 +739,25 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 600 ? 5 : 3;
+    return RefreshIndicator(
+      onRefresh: _reloadCurrentView,
+      color: FlikTokens.accentSoft,
+      backgroundColor: FlikTokens.surface,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final crossAxisCount = constraints.maxWidth > 600 ? 5 : 3;
 
-        return GridView.builder(
-          controller: _scrollController,
-          padding: const EdgeInsets.all(6),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 4,
-            mainAxisSpacing: 4,
-          ),
-          itemCount: displayedAssets.length + (_hasMore && _searchQuery.isEmpty ? 1 : 0),
-          itemBuilder: (context, index) {
+          return GridView.builder(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(6),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 4,
+              mainAxisSpacing: 4,
+            ),
+            itemCount: displayedAssets.length + (_hasMore && _searchQuery.isEmpty ? 1 : 0),
+            itemBuilder: (context, index) {
             if (index >= displayedAssets.length) {
               return const Center(
                 child: Padding(
@@ -780,8 +844,9 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
           },
         );
       },
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildSelectionActionBar() {
     return Container(

@@ -2,7 +2,7 @@
 
 export type PlatformType = 'android' | 'windows';
 
-export type FileKind = 'file' | 'image' | 'video';
+export type FileKind = 'file' | 'image' | 'video' | 'audio' | 'url';
 
 export interface TransferItemMeta {
   name: string;

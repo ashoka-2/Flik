@@ -642,6 +642,7 @@ class FlikConnectorApp {
 
     // Returns local device status, IP, port, and QR data payload
     ipcMain.handle('flik:get-device-info', () => {
+      this.detectLocalIp();
       return {
         deviceId: this.store.getDeviceId(),
         deviceName: this.store.getDeviceName(),
@@ -791,13 +792,19 @@ class FlikConnectorApp {
     const mdnsPeers = this.mdns.getDiscoveredPeers();
     const connectedClients = this.server.getConnectedClients();
     const myId = this.store.getDeviceId();
+    const myName = (this.store.getDeviceName() || '').toLowerCase();
+    const myIp = this.localIp;
 
     const combined = new Map<string, any>();
     for (const p of mdnsPeers) {
-      if (p.deviceId !== myId) combined.set(p.deviceId, p);
+      const pName = (p.deviceName || '').toLowerCase();
+      if (p.deviceId !== myId && pName !== myName && p.ip !== myIp && p.ip !== '127.0.0.1') {
+        combined.set(p.deviceId, p);
+      }
     }
     for (const c of connectedClients) {
-      if (c.deviceId !== myId) {
+      const cName = (c.deviceName || '').toLowerCase();
+      if (c.deviceId !== myId && cName !== myName && c.ip !== myIp && c.ip !== '127.0.0.1') {
         combined.set(c.deviceId, {
           deviceId: c.deviceId,
           deviceName: c.deviceName,
