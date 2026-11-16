@@ -42,6 +42,24 @@ export class FlikReceiverServer extends EventEmitter {
   private isReceiving: boolean = false;
   private activeTransferId: string | null = null;
   private activeStreams: fs.WriteStream[] = [];
+  private connectedClients: Map<string, { deviceId: string; deviceName: string; ip: string; port: number; platform: string; lastSeen: number }> = new Map();
+
+  public getConnectedClients() {
+    return Array.from(this.connectedClients.values());
+  }
+
+  public registerClient(client: { deviceId: string; deviceName: string; ip: string; port?: number; platform?: string }) {
+    const cleanIp = client.ip.replace(/^.*:/, '') || '127.0.0.1';
+    this.connectedClients.set(client.deviceId, {
+      deviceId: client.deviceId,
+      deviceName: client.deviceName || 'Phone',
+      ip: cleanIp,
+      port: client.port || 54321,
+      platform: client.platform || 'android',
+      lastSeen: Date.now(),
+    });
+    this.emit('clients-updated', this.getConnectedClients());
+  }
 
   constructor(store: FlikSettingsStore, tempWorkspace: string) {
     super();
@@ -131,8 +149,8 @@ export class FlikReceiverServer extends EventEmitter {
   }
 
   private setupRoutes(): void {
-    // GET /media - Local media streamer for images and videos with range requests
-    this.app.get('/media', (req: Request, res: Response) => {
+    // GET /media - Local media streamer for images and videos with range requests and on-the-fly HEIC conversion
+    this.app.get('/media', async (req: Request, res: Response) => {
       const fileQuery = req.query.file as string;
       if (!fileQuery) {
         res.status(400).send('Missing file parameter');
@@ -142,12 +160,61 @@ export class FlikReceiverServer extends EventEmitter {
         const decoded = decodeURIComponent(fileQuery);
         const targetPath = path.resolve(decoded);
         if (fs.existsSync(targetPath)) {
+          const ext = path.extname(targetPath).toLowerCase();
+          if (ext === '.heic' || ext === '.heif') {
+            try {
+              const heicConvert = require('heic-convert');
+              const buf = await fs.promises.readFile(targetPath);
+              const outputBuffer = await heicConvert({
+                buffer: buf,
+                format: 'JPEG',
+                quality: 0.92,
+              });
+              res.set('Content-Type', 'image/jpeg');
+              return res.send(Buffer.from(outputBuffer));
+            } catch (convErr) {
+              console.error('HEIC convert error in /media:', convErr);
+            }
+          }
           return res.sendFile(targetPath);
         }
       } catch (e) {
         console.error('Failed serving /media:', e);
       }
       res.status(404).send('File not found');
+    });
+
+    // POST /connect-client - Instant client handshake when phone connects via QR or IP
+    this.app.post('/connect-client', (req: Request, res: Response) => {
+      const body = req.body || {};
+      const clientIp = (req.socket.remoteAddress || req.ip || '').replace(/^.*:/, '') || '127.0.0.1';
+      const deviceId = body.deviceId || crypto.randomUUID();
+      const deviceName = body.deviceName || 'Phone';
+      const port = Number(body.port) || 54321;
+      const platform = body.platform || 'android';
+      const token = body.token || generateAuthToken();
+
+      this.store.saveTrustedDevice({
+        deviceId,
+        deviceName,
+        platform,
+        token,
+      });
+
+      this.registerClient({
+        deviceId,
+        deviceName,
+        ip: clientIp,
+        port,
+        platform,
+      });
+
+      res.status(200).json({
+        status: 'ok',
+        deviceId: this.store.getDeviceId(),
+        deviceName: this.store.getDeviceName(),
+        token,
+      });
     });
 
     // GET /ping - Lightweight connectivity and capacity pre-flight check
@@ -218,6 +285,15 @@ export class FlikReceiverServer extends EventEmitter {
       const senderId = req.headers['x-flik-device-id'] as string;
       const sender = this.store.getTrustedDevice(senderId);
       const senderName = sender ? sender.deviceName : 'Unknown Phone';
+
+      if (senderId) {
+        const clientIp = (req.socket.remoteAddress || req.ip || '').replace(/^.*:/, '') || '127.0.0.1';
+        this.registerClient({
+          deviceId: senderId,
+          deviceName: senderName,
+          ip: clientIp,
+        });
+      }
 
       if (this.isReceiving) {
         res.status(409).json({ error: 'busy' });

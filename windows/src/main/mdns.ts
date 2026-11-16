@@ -9,9 +9,15 @@ export class FlikMdnsService extends EventEmitter {
   private bonjour: Bonjour | null = null;
   private publishedService: Service | null = null;
   private peers: Map<string, DiscoveredPeer> = new Map();
+  private myDeviceId: string = '';
 
-  constructor() {
+  constructor(myDeviceId?: string) {
     super();
+    if (myDeviceId) this.myDeviceId = myDeviceId;
+  }
+
+  public setMyDeviceId(id: string): void {
+    this.myDeviceId = id;
   }
 
   // Publishes this device on the local network so Android phones can discover it.
@@ -53,6 +59,7 @@ export class FlikMdnsService extends EventEmitter {
         const txt = service.txt || {};
         const deviceId = txt.deviceId;
         if (!deviceId) return;
+        if (this.myDeviceId && deviceId === this.myDeviceId) return; // Never discover own device as peer!
 
         // Extract IPv4 address
         const addresses = service.addresses || [];

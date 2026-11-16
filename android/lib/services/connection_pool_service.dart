@@ -199,7 +199,7 @@ class ConnectionPoolService {
     return false;
   }
 
-  // Adds a device manually by IP and port
+  // Adds a device manually by IP and port and registers mutual client handshake
   Future<bool> addManualDevice(String ip, int port) async {
     final ping = await preflightPing(ip, port);
     if (ping != null) {
@@ -211,6 +211,26 @@ class ConnectionPoolService {
         port: port,
         token: storage.getToken(ping['deviceId'] as String),
       );
+
+      // Perform instant mutual client handshake so PC knows about this phone and registers token
+      try {
+        final clientToken = storage.getToken(peer.deviceId) ?? const Uuid().v4().replaceAll('-', '');
+        await storage.saveToken(peer.deviceId, clientToken);
+        peer.token = clientToken;
+
+        await _dio.post(
+          'http://$ip:$port/connect-client',
+          data: {
+            'deviceId': storage.getDeviceId(),
+            'deviceName': storage.getDeviceName(),
+            'platform': 'android',
+            'port': 54321,
+            'token': clientToken,
+          },
+          options: Options(sendTimeout: const Duration(seconds: 4), receiveTimeout: const Duration(seconds: 4)),
+        );
+      } catch (_) {}
+
       _peers[peer.deviceId] = peer;
       _peersController.add(_peers.values.toList());
       return true;

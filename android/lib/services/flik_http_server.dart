@@ -69,6 +69,38 @@ class FlikHttpServer {
       );
     });
 
+    // POST /url - Incoming Web Link from PC or phone to open in browser
+    router.post('/url', (Request req) async {
+      try {
+        final bodyStr = await req.readAsString();
+        final body = jsonDecode(bodyStr) as Map<String, dynamic>;
+        final url = body['url'] as String?;
+        final sender = body['senderDevice'] as String? ?? 'PC';
+        if (url != null && (url.startsWith('http://') || url.startsWith('https://'))) {
+          final uri = Uri.tryParse(url);
+          if (uri != null) {
+            launchUrl(uri, mode: LaunchMode.externalApplication);
+            await storage.addHistoryEntry(
+              TransferHistoryEntry(
+                id: const Uuid().v4(),
+                deviceName: sender,
+                summaryName: url,
+                timestamp: DateTime.now(),
+                totalBytes: url.length,
+                itemsCount: 1,
+                isOutbound: false,
+                status: 'completed',
+                kind: 'url',
+              ),
+            );
+            onToast('Opened link from $sender');
+            return Response.ok(jsonEncode({'status': 'opened'}));
+          }
+        }
+      } catch (_) {}
+      return Response.badRequest(body: jsonEncode({'error': 'Invalid URL'}));
+    });
+
     // POST /pair
     router.post('/pair', (Request req) async {
       try {

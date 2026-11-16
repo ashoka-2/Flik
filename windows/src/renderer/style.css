@@ -414,12 +414,29 @@ body {
 .tray-shell {
   width: 100vw;
   height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   background: var(--bg);
   border: 1px solid var(--line);
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+}
+
+.tray-shell::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tray-shell::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tray-shell::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
 }
 
 .tray-header {

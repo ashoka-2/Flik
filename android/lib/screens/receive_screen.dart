@@ -125,6 +125,67 @@ class _ReceiveScreenState extends ConsumerState<ReceiveScreen>
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(
           children: [
+            // Top Primary Toggle: Receive Mode Active Switch
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: state.isReceiveMode ? Colors.greenAccent.withOpacity(0.12) : FlikTokens.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: state.isReceiveMode ? Colors.greenAccent.withOpacity(0.5) : FlikTokens.line,
+                  width: 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: state.isReceiveMode ? Colors.greenAccent : FlikTokens.raised,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        state.isReceiveMode ? Icons.wifi_tethering : Icons.wifi_tethering_off,
+                        size: 22,
+                        color: state.isReceiveMode ? Colors.black : FlikTokens.muted,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          state.isReceiveMode ? 'Receive Mode is Active' : 'Receive Mode Paused',
+                          style: TextStyle(
+                            color: state.isReceiveMode ? Colors.greenAccent : FlikTokens.text,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          state.isReceiveMode
+                              ? 'Listening for incoming transfers'
+                              : 'Tap switch to make device visible',
+                          style: const TextStyle(color: FlikTokens.muted, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: state.isReceiveMode,
+                    activeColor: Colors.greenAccent,
+                    onChanged: (_) => notifier.toggleReceiveMode(),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Editable Device Name Banner
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -355,29 +416,6 @@ class _ReceiveScreenState extends ConsumerState<ReceiveScreen>
                   ),
                 ],
               ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Receive Mode Switch Toggle
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  state.isReceiveMode ? 'Receive Mode is Active' : 'Receive Mode Paused',
-                  style: TextStyle(
-                    color: state.isReceiveMode ? Colors.greenAccent : FlikTokens.muted,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Switch(
-                  value: state.isReceiveMode,
-                  activeColor: Colors.greenAccent,
-                  onChanged: (_) => notifier.toggleReceiveMode(),
-                ),
-              ],
             ),
           ],
         ),

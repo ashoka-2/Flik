@@ -87,6 +87,11 @@ const flikApi = {
     return await ipcRenderer.invoke('flik:get-device-info');
   },
 
+  // Sends a Web URL to the phone to open in browser
+  sendUrlToPhone: async (url: string, peerDeviceId?: string): Promise<boolean> => {
+    return await ipcRenderer.invoke('flik:send-url-to-phone', { url, peerDeviceId });
+  },
+
   // Fetches list of discovered peers
   getPeers: async () => {
     return await ipcRenderer.invoke('flik:get-peers');
@@ -135,6 +140,12 @@ const flikApi = {
     const sub = (_: any, peers: any[]) => callback(peers);
     ipcRenderer.on('flik:peers-updated', sub);
     return () => ipcRenderer.removeListener('flik:peers-updated', sub);
+  },
+
+  onClientsUpdated: (callback: (clients: any[]) => void) => {
+    const sub = (_: any, clients: any[]) => callback(clients);
+    ipcRenderer.on('flik:clients-updated', sub);
+    return () => ipcRenderer.removeListener('flik:clients-updated', sub);
   },
 };
 

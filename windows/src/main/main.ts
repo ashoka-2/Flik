@@ -171,6 +171,7 @@ class FlikConnectorApp {
     }
 
     // Advertise via mDNS
+    this.mdns.setMyDeviceId(this.store.getDeviceId());
     this.mdns.publish(this.store.getDeviceId(), this.store.getDeviceName(), this.boundPort);
     this.mdns.startDiscovery();
 
@@ -383,19 +384,56 @@ class FlikConnectorApp {
       });
     });
 
-    // When files finish streaming into temp workspace, display them as landing cards
+    // When files finish streaming into temp workspace, display them on the specific targeted monitor
     this.server.on('transfer-received', (card: ActiveTransferCard) => {
-      const primaryDisplay = screen.getPrimaryDisplay();
-      const { bounds } = primaryDisplay;
-      const cardWidth = 320;
+      const allDisplays = screen.getAllDisplays();
+      // Sort displays left-to-right by bounds.x
+      allDisplays.sort((a, b) => a.bounds.x - b.bounds.x);
+
       const traj = typeof card.trajectoryX === 'number' ? card.trajectoryX : 0.0;
       const normalizedTraj = Math.max(-1.0, Math.min(1.0, traj));
-      // Map traj (-1.0 to +1.0) across primary monitor width:
-      const centerX = bounds.width * 0.5 + normalizedTraj * (bounds.width * 0.38) - (cardWidth / 2);
+
+      let targetDisplay = allDisplays[0];
+      let subTraj = normalizedTraj;
+
+      if (allDisplays.length > 1) {
+        // Map normalizedTraj (-1.0 to +1.0) into discrete sectors for each display
+        const t = (normalizedTraj + 1.0) / 2.0; // 0.0 to 1.0
+        const index = Math.min(allDisplays.length - 1, Math.floor(t * allDisplays.length));
+        targetDisplay = allDisplays[index];
+
+        // Compute local trajectory within the selected display (-1.0 to 1.0)
+        const sectorWidth = 1.0 / allDisplays.length;
+        const localT = (t - index * sectorWidth) / sectorWidth;
+        subTraj = localT * 2.0 - 1.0;
+      }
+
+      const { bounds } = targetDisplay;
+      const cardWidth = 320;
+      const centerX = bounds.width * 0.5 + subTraj * (bounds.width * 0.38) - (cardWidth / 2);
       card.x = Math.round(Math.max(40, Math.min(bounds.width - cardWidth - 40, centerX)));
       card.y = Math.round(Math.max(100, bounds.height * 0.32));
 
-      this.broadcastToOverlays('flik:transfer-received', card);
+      // Land ONLY on targetDisplay's overlay window - NEVER duplicate across screens
+      const targetWin = this.overlayWindows.get(targetDisplay.id);
+      if (targetWin && !targetWin.isDestroyed()) {
+        targetWin.webContents.send('flik:transfer-received', card);
+      } else {
+        // Fallback to first available overlay
+        for (const win of this.overlayWindows.values()) {
+          if (!win.isDestroyed()) {
+            win.webContents.send('flik:transfer-received', card);
+            break;
+          }
+        }
+      }
+    });
+
+    this.server.on('clients-updated', (clients) => {
+      this.broadcastToOverlays('flik:clients-updated', clients);
+      if (this.trayWindow && !this.trayWindow.isDestroyed()) {
+        this.trayWindow.webContents.send('flik:clients-updated', clients);
+      }
     });
 
     // When a valid web URL is received, open it immediately and show brief toast
@@ -625,7 +663,29 @@ class FlikConnectorApp {
     });
 
     ipcMain.handle('flik:get-peers', () => {
-      return this.mdns.getDiscoveredPeers();
+      const mdnsPeers = this.mdns.getDiscoveredPeers();
+      const connectedClients = this.server.getConnectedClients();
+      const myId = this.store.getDeviceId();
+
+      const combined = new Map<string, any>();
+      for (const p of mdnsPeers) {
+        if (p.deviceId !== myId) {
+          combined.set(p.deviceId, p);
+        }
+      }
+      for (const c of connectedClients) {
+        if (c.deviceId !== myId) {
+          combined.set(c.deviceId, {
+            deviceId: c.deviceId,
+            deviceName: c.deviceName,
+            ip: c.ip,
+            port: c.port,
+            platform: c.platform,
+            paired: true,
+          });
+        }
+      }
+      return Array.from(combined.values());
     });
 
     ipcMain.handle('flik:set-start-with-windows', (_event, enable: boolean) => {
@@ -640,12 +700,12 @@ class FlikConnectorApp {
 
     // Prompts native multi-file dialog and streams files to connected phone
     ipcMain.handle('flik:prompt-send-files', async (_event, peerDeviceId?: string) => {
-      const peers = this.mdns.getDiscoveredPeers();
+      const peers = await this.getAvailablePhonePeers();
       if (peers.length === 0) {
         dialog.showMessageBox({
           type: 'info',
           title: 'No Phone Connected',
-          message: 'No Flik devices were found on your Wi-Fi network. Open Flik on your phone and tap Receive.',
+          message: 'No connected phone found. Open Flik on your phone and ensure both are on Wi-Fi or Hotspot.',
         });
         return false;
       }
@@ -672,7 +732,7 @@ class FlikConnectorApp {
 
     // Streams dropped files from the desktop Dropbox to the connected phone
     ipcMain.handle('flik:send-dropped-files', async (_event, { filePaths, peerDeviceId }: { filePaths: string[]; peerDeviceId?: string }) => {
-      const peers = this.mdns.getDiscoveredPeers();
+      const peers = await this.getAvailablePhonePeers();
       if (peers.length === 0) {
         this.broadcastToOverlays('flik:toast', 'No phone connected to receive dropped files.');
         return false;
@@ -689,6 +749,66 @@ class FlikConnectorApp {
         return false;
       }
     });
+
+    // Sends a Web URL to the phone to open in its default browser
+    ipcMain.handle('flik:send-url-to-phone', async (_event, { url, peerDeviceId }: { url: string; peerDeviceId?: string }) => {
+      const peers = await this.getAvailablePhonePeers();
+      if (peers.length === 0) {
+        this.broadcastToOverlays('flik:toast', 'No phone connected to receive link.');
+        return false;
+      }
+      const target = peerDeviceId ? peers.find((p) => p.deviceId === peerDeviceId) || peers[0] : peers[0];
+
+      try {
+        const token = this.store.getTrustedDevice(target.deviceId)?.token || 'default';
+        const res = await fetch(`http://${target.ip}:${target.port}/url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Flik-Device-Id': this.store.getDeviceId(),
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            url,
+            senderDevice: this.store.getDeviceName(),
+          }),
+        });
+
+        if (res.ok) {
+          this.broadcastToOverlays('flik:toast', `Link sent to ${target.deviceName}!`);
+          return true;
+        }
+      } catch (err) {
+        console.error('Failed sending URL to phone:', err);
+      }
+      this.broadcastToOverlays('flik:toast', `Could not reach ${target.deviceName}`);
+      return false;
+    });
+  }
+
+  // Returns all available phone targets, combining mDNS peers and connected clients
+  private async getAvailablePhonePeers(): Promise<any[]> {
+    const mdnsPeers = this.mdns.getDiscoveredPeers();
+    const connectedClients = this.server.getConnectedClients();
+    const myId = this.store.getDeviceId();
+
+    const combined = new Map<string, any>();
+    for (const p of mdnsPeers) {
+      if (p.deviceId !== myId) combined.set(p.deviceId, p);
+    }
+    for (const c of connectedClients) {
+      if (c.deviceId !== myId) {
+        combined.set(c.deviceId, {
+          deviceId: c.deviceId,
+          deviceName: c.deviceName,
+          ip: c.ip,
+          port: c.port,
+          platform: c.platform,
+          paired: true,
+        });
+      }
+    }
+    return Array.from(combined.values());
   }
 
   // Opens native file picker to select files for outbound sending to an Android phone

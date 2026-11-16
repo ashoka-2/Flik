@@ -11,8 +11,8 @@ import '../widgets/radar_view.dart';
 import '../widgets/staged_deck_widget.dart';
 import '../widgets/error_normalizer_toast.dart';
 import 'gallery_tab.dart';
-import 'files_tab.dart';
-import 'links_tab.dart';
+import 'files_and_links_tab.dart';
+import 'received_files_tab.dart';
 import 'library_tab.dart';
 import 'qr_scanner_screen.dart';
 import 'receive_screen.dart';
@@ -331,7 +331,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
                     const Divider(height: 1, color: FlikTokens.line),
 
-                    // Bottom Tab Content (Gallery, Files, Links, Library)
+                    // Bottom Tab Content (Library, Gallery, Files & Links, Received Files)
                     Expanded(
                       child: IndexedStack(
                         index: _currentTabIndex,
@@ -343,11 +343,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                           GalleryTab(
                             onStageItems: (items) => notifier.stageItems(items),
                           ),
-                          FilesTab(
+                          FilesAndLinksTab(
                             onStageItems: (items) => notifier.stageItems(items),
                           ),
-                          LinksTab(
-                            onStageItem: (item) => notifier.stageItems([item]),
+                          ReceivedFilesTab(
+                            storage: notifier.storage,
                           ),
                         ],
                       ),
@@ -377,8 +377,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Library'),
           BottomNavigationBarItem(icon: Icon(Icons.photo_library), label: 'Gallery'),
-          BottomNavigationBarItem(icon: Icon(Icons.folder), label: 'Files'),
-          BottomNavigationBarItem(icon: Icon(Icons.link), label: 'Links'),
+          BottomNavigationBarItem(icon: Icon(Icons.attachment), label: 'Files & Links'),
+          BottomNavigationBarItem(icon: Icon(Icons.inbox), label: 'Received'),
         ],
       ),
     );

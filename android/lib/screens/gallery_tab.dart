@@ -92,16 +92,28 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     setState(() => _isLoading = true);
     final permission = await PhotoManager.requestPermissionExtend();
     if (permission.isAuth || permission.hasAccess) {
-      // 1. Fetch common media (images + videos) without restrictive timestamp filters
+      // Configure filterOption so MediaStore orders newest items first (descending createDate)
+      final filterOption = FilterOptionGroup(
+        orders: [
+          const OrderOption(
+            type: OrderOptionType.createDate,
+            asc: false,
+          ),
+        ],
+      );
+
+      // 1. Fetch common media (images + videos) with newest-first ordering
       final commonAlbums = await PhotoManager.getAssetPathList(
         type: RequestType.common,
         hasAll: true,
+        filterOption: filterOption,
       );
 
-      // 2. Fetch video-specific path to ensure an all-videos album is present
+      // 2. Fetch video-specific query to ensure all device videos are categorized
       final videoAlbums = await PhotoManager.getAssetPathList(
         type: RequestType.video,
         hasAll: true,
+        filterOption: filterOption,
       );
 
       if (commonAlbums.isNotEmpty) {
@@ -111,6 +123,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
         AssetPathEntity? foundFavorites;
         AssetPathEntity? foundVideos;
         AssetPathEntity? foundScreenshots;
+        int maxScreenshotCount = -1;
+        int maxCameraCount = -1;
         final others = <AssetPathEntity>[];
 
         for (final album in commonAlbums) {
@@ -118,11 +132,20 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
           if (album.isAll) {
             foundAll = album;
           } else if (name == 'camera' || name == 'dcim' || name.contains('camera')) {
-            foundCamera ??= album;
+            final count = await album.assetCountAsync;
+            if (count > maxCameraCount) {
+              foundCamera = album;
+              maxCameraCount = count;
+            }
           } else if (name.contains('favorit') || name.contains('favourite')) {
             foundFavorites ??= album;
           } else if (name.contains('screenshot') || name.contains('screen_shot')) {
-            foundScreenshots ??= album;
+            final count = await album.assetCountAsync;
+            // Always pick the screenshot album with the largest number of images!
+            if (count > maxScreenshotCount) {
+              foundScreenshots = album;
+              maxScreenshotCount = count;
+            }
           } else if (name.contains('video')) {
             foundVideos ??= album;
           } else {
@@ -130,8 +153,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
           }
         }
 
-        // Fallback for Videos album from video-specific query if not found in buckets
-        if (foundVideos == null && videoAlbums.isNotEmpty) {
+        // Guarantee dedicated full-device Videos album if available
+        if (videoAlbums.isNotEmpty) {
           foundVideos = videoAlbums.first;
         }
 

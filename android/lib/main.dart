@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/flik_state.dart';
 import 'screens/main_screen.dart';
@@ -8,6 +9,12 @@ import 'theme/theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Lock app orientation strictly to Portrait (cannot rotate to landscape)
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
 
   // Initialize Android background receive service capability
   ForegroundReceiverService.init();
@@ -36,6 +43,15 @@ class FlikApp extends StatelessWidget {
       theme: FlikTheme.darkTheme,
       darkTheme: FlikTheme.darkTheme,
       themeMode: ThemeMode.dark,
+      // Clamp text scale to 1.0 so enlarged system accessibility font sizes never break layouts
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: const TextScaler.linear(1.0),
+          ),
+          child: child ?? const SizedBox(),
+        );
+      },
       home: const MainScreen(),
     );
   }
