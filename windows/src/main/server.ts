@@ -247,7 +247,7 @@ export class FlikReceiverServer extends EventEmitter {
             try {
               meta = JSON.parse(val) as TransferMeta;
               this.activeTransferId = meta.transferId;
-              transferDir = path.join(this.tempDir, meta.transferId);
+              transferDir = this.tempDir;
               if (!fs.existsSync(transferDir)) {
                 fs.mkdirSync(transferDir, { recursive: true });
               }
@@ -277,9 +277,19 @@ export class FlikReceiverServer extends EventEmitter {
 
           const currentItem = meta.items[fileIndex];
           fileIndex++;
-          const safeName = sanitizeFilename(currentItem.name || info.filename || 'file');
-          const finalPath = path.join(transferDir, safeName);
-          const partPath = `${finalPath}.part`;
+          const rawSafeName = sanitizeFilename(currentItem.name || info.filename || 'file');
+          let safeName = rawSafeName;
+          let finalPath = path.join(transferDir, safeName);
+          let partPath = `${finalPath}.${meta.transferId}.part`;
+          let counter = 1;
+          const ext = path.extname(rawSafeName);
+          const base = path.basename(rawSafeName, ext);
+          while (fs.existsSync(finalPath) && !fs.existsSync(partPath)) {
+            safeName = `${base} (${counter})${ext}`;
+            finalPath = path.join(transferDir, safeName);
+            partPath = `${finalPath}.${meta.transferId}.part`;
+            counter++;
+          }
           partialFiles.push(partPath);
 
           const writeStream = fs.createWriteStream(partPath);

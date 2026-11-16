@@ -57,14 +57,24 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     setState(() => _isLoading = true);
     final permission = await PhotoManager.requestPermissionExtend();
     if (permission.isAuth || permission.hasAccess) {
+      final filterOption = FilterOptionGroup(
+        orders: [
+          const OrderOption(
+            type: OrderOptionType.createDate,
+            asc: false, // DESCENDING: Newest photos, screenshots & WhatsApp first!
+          ),
+        ],
+      );
+
       final albums = await PhotoManager.getAssetPathList(
         type: _mediaFilter,
         hasAll: true,
+        filterOption: filterOption,
       );
 
       if (albums.isNotEmpty) {
         _albums = albums;
-        // Always select the "All" album by default
+        // Always select the "All Photos" album by default
         _selectedAlbum = albums.first;
         _currentPage = 0;
         _hasMore = true;

@@ -192,6 +192,56 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
     }
   }
 
+  Future<bool> sendUrl(String url, {String? title}) async {
+    if (state.peers.isEmpty) {
+      showToast('No device connected. Please pair with PC or phone first.');
+      return false;
+    }
+    final targetPeers = state.lockedPeerId != null
+        ? state.peers.where((p) => p.deviceId == state.lockedPeerId).toList()
+        : [state.peers.first];
+    if (targetPeers.isEmpty) return false;
+
+    bool overallSuccess = false;
+    for (final peer in targetPeers) {
+      if (peer.token == null && storage.getToken(peer.deviceId) == null) {
+        final paired = await connectionPool.pairWithPeer(
+          peer,
+          onCodeGenerated: (code) => showToast('Pairing with ${peer.deviceName}: code $code'),
+        );
+        if (!paired) {
+          showToast('${peer.deviceName} declined connection.');
+          return false;
+        }
+      }
+
+      final success = await client.sendUrl(
+        peer: peer,
+        url: url,
+        title: title,
+        onError: (err) => showToast(err),
+      );
+
+      if (success) {
+        overallSuccess = true;
+        showToast('Link sent! Opening in browser on ${peer.deviceName}...');
+        await storage.addHistoryEntry(
+          TransferHistoryEntry(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            deviceName: peer.deviceName,
+            isOutbound: true,
+            itemsCount: 1,
+            totalBytes: url.length,
+            timestamp: DateTime.now(),
+            summaryName: title ?? url,
+            status: 'completed',
+          ),
+        );
+      }
+    }
+    return overallSuccess;
+  }
+
   // Sends items directly without requiring prior staging
   Future<bool> sendItemsDirectly(List<TransferItem> items, {double? trajectoryX}) async {
     if (items.isEmpty || state.isSending) return false;

@@ -110,6 +110,13 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
 
   Future<void> _triggerFlickSend() async {
     if (_isSending || _currentIndex >= widget.assets.length) return;
+
+    final state = ref.read(flikAppProvider);
+    if (state.peers.isEmpty) {
+      ref.read(flikAppProvider.notifier).showToast('No device connected. Please pair with PC or phone first.');
+      return;
+    }
+
     setState(() => _isSending = true);
 
     final currentAsset = widget.assets[_currentIndex];
@@ -157,6 +164,15 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
       // Reached end of deck
       Navigator.pop(context);
     }
+  }
+
+  String _getAimingLabel(double tilt) {
+    if (tilt < -0.25) {
+      return 'Aiming Left ◄';
+    } else if (tilt > 0.25) {
+      return 'Aiming Right ►';
+    }
+    return 'Aiming Center ▲';
   }
 
   void _nextPhoto() {
@@ -307,6 +323,32 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Live trajectory aiming pill
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: FlikTokens.surface,
+                      borderRadius: BorderRadius.circular(FlikTokens.radiusPill),
+                      border: Border.all(color: FlikTokens.line),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.screen_share, size: 14, color: FlikTokens.accentSoft),
+                        const SizedBox(width: 6),
+                        Text(
+                          _getAimingLabel(_sensorService?.currentTiltX ?? 0.0),
+                          style: const TextStyle(
+                            color: FlikTokens.text,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
                   // Prominent Send Pill Button
                   ElevatedButton(
                     onPressed: _isSending ? null : _triggerFlickSend,

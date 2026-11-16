@@ -17,6 +17,7 @@ import {
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { pathToFileURL } from 'url';
 import { FlikSettingsStore } from './store';
 import { FlikReceiverServer } from './server';
 import { FlikMdnsService } from './mdns';
@@ -139,10 +140,24 @@ class FlikConnectorApp {
     await app.whenReady();
 
     // Protocol handler to stream local image and video thumbnails to cards
-    protocol.handle('flik-media', (request) => {
-      const rawPath = request.url.replace(/^flik-media:\/\//, '');
-      const filePath = decodeURIComponent(rawPath);
-      return net.fetch(`file:///${filePath.replace(/\\/g, '/')}`);
+    protocol.handle('flik-media', async (request) => {
+      try {
+        const url = new URL(request.url);
+        let targetFile = url.searchParams.get('file');
+        if (!targetFile) {
+          const raw = request.url.replace(/^flik-media:\/\//, '');
+          targetFile = decodeURIComponent(raw);
+        }
+        if (targetFile) {
+          targetFile = path.normalize(targetFile);
+          if (fs.existsSync(targetFile)) {
+            return net.fetch(pathToFileURL(targetFile).toString());
+          }
+        }
+      } catch (err) {
+        console.error('flik-media protocol error:', err);
+      }
+      return new Response('File not found', { status: 404 });
     });
 
     try {
@@ -369,6 +384,16 @@ class FlikConnectorApp {
 
     // When files finish streaming into temp workspace, display them as landing cards
     this.server.on('transfer-received', (card: ActiveTransferCard) => {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { bounds } = primaryDisplay;
+      const cardWidth = 320;
+      const traj = typeof card.trajectoryX === 'number' ? card.trajectoryX : 0.0;
+      const normalizedTraj = Math.max(-1.0, Math.min(1.0, traj));
+      // Map traj (-1.0 to +1.0) across primary monitor width:
+      const centerX = bounds.width * 0.5 + normalizedTraj * (bounds.width * 0.38) - (cardWidth / 2);
+      card.x = Math.round(Math.max(40, Math.min(bounds.width - cardWidth - 40, centerX)));
+      card.y = Math.round(Math.max(100, bounds.height * 0.32));
+
       this.broadcastToOverlays('flik:transfer-received', card);
     });
 
@@ -498,6 +523,21 @@ class FlikConnectorApp {
           if (fs.existsSync(p)) fs.unlinkSync(p);
         } catch {}
       }
+    });
+
+    // Reads local image file into base64 data URL as bulletproof renderer fallback
+    ipcMain.handle('flik:read-media-data-url', async (_event, filePath: string) => {
+      try {
+        if (filePath && fs.existsSync(filePath)) {
+          const buf = await fs.promises.readFile(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+          return `data:${mime};base64,${buf.toString('base64')}`;
+        }
+      } catch (e) {
+        console.error('Failed reading media data url:', e);
+      }
+      return null;
     });
 
     // Minimizes dashboard to system tray

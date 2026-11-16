@@ -39,6 +39,11 @@ const flikApi = {
     ipcRenderer.send('flik:delete-files', filePaths);
   },
 
+  // Reads media file into base64 data URL for 100% reliable image card rendering
+  readMediaDataUrl: async (filePath: string): Promise<string | null> => {
+    return await ipcRenderer.invoke('flik:read-media-data-url', filePath);
+  },
+
   // Sets human-readable device name
   setDeviceName: async (name: string) => {
     return await ipcRenderer.invoke('flik:set-device-name', name);

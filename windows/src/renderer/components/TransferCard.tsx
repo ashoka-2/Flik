@@ -12,6 +12,23 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   const dragOffset = useRef({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const firstItem = card.items[0];
+  const sizeMb = firstItem ? (firstItem.size / (1024 * 1024)).toFixed(1) : '0';
+
+  const [imgSrc, setImgSrc] = useState<string>(() => {
+    if (!firstItem?.localPath) return '';
+    return `flik-media://view?file=${encodeURIComponent(firstItem.localPath)}`;
+  });
+
+  const handleImgError = async () => {
+    if (firstItem?.localPath && window.flik?.readMediaDataUrl) {
+      const dataUrl = await window.flik.readMediaDataUrl(firstItem.localPath);
+      if (dataUrl) {
+        setImgSrc(dataUrl);
+      }
+    }
+  };
+
   const handlePointerDown = (e: React.PointerEvent) => {
     // Prevent dragging when clicking interactive buttons
     if ((e.target as HTMLElement).tagName === 'BUTTON') return;
@@ -49,9 +66,6 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
     }
   };
 
-  const firstItem = card.items[0];
-  const sizeMb = firstItem ? (firstItem.size / (1024 * 1024)).toFixed(1) : '0';
-
   const getItemIcon = (kind: string) => {
     switch (kind) {
       case 'image':
@@ -69,7 +83,8 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
       className="flik-card interactive flying-in"
       data-interactive="true"
       style={{
-        transform: `translate3d(${card.x}px, ${card.y}px, 0)`,
+        left: `${card.x}px`,
+        top: `${card.y}px`,
       }}
       draggable
       onDragStart={handleDragStart}
@@ -92,9 +107,10 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
       {firstItem?.kind === 'image' ? (
         <div className="photo-card-body">
           <img
-            src={`flik-media://${firstItem.localPath}`}
-            alt={firstItem.name}
+            src={imgSrc}
+            alt={firstItem?.name || 'Photo'}
             className="photo-card-img"
+            onError={handleImgError}
           />
         </div>
       ) : (
