@@ -26,6 +26,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [isExpandedVideo, setIsExpandedVideo] = useState<boolean>(false);
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
 
   const ext = firstItem?.name ? firstItem.name.split('.').pop()?.toLowerCase() : '';
   const isVideo = firstItem?.kind === 'video' || firstItem?.mime?.startsWith('video/') || ['mp4', 'mkv', 'mov', 'avi', 'webm', '3gp'].includes(ext || '');
@@ -51,6 +52,10 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
 
     const handleEscKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (contextMenuPos) {
+          setContextMenuPos(null);
+          return;
+        }
         if (isExpandedVideo) {
           setIsExpandedVideo(false);
         }
@@ -65,10 +70,22 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
       isMounted = false;
       window.removeEventListener('keydown', handleEscKey);
     };
-  }, [firstItem?.localPath, isImage, isExpandedVideo, ext]);
+  }, [firstItem?.localPath, isImage, isExpandedVideo, ext, contextMenuPos]);
+
+  // Click outside to dismiss context menu
+  useEffect(() => {
+    if (!contextMenuPos) return;
+    const handleOutsideClick = (e: MouseEvent | PointerEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setContextMenuPos(null);
+      }
+    };
+    window.addEventListener('pointerdown', handleOutsideClick);
+    return () => window.removeEventListener('pointerdown', handleOutsideClick);
+  }, [contextMenuPos]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'INPUT') return;
+    if ((e.target as HTMLElement).tagName === 'BUTTON' || (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).closest('.flik-context-menu')) return;
     setIsDragging(true);
     dragMoved.current = false;
     dragOffset.current = {
@@ -96,9 +113,13 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   };
 
   const handleClick = (e: React.MouseEvent) => {
+    if (contextMenuPos) {
+      setContextMenuPos(null);
+      return;
+    }
     if (dragMoved.current) return;
-    // Don't open if clicked interactive control buttons
-    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).tagName === 'INPUT') return;
+    // Don't open if clicked interactive control buttons or context menu
+    if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).closest('.flik-context-menu')) return;
     if (firstItem?.localPath && !isAudio && !isVideo) {
       window.flik?.openFile(firstItem.localPath);
     }
@@ -107,9 +128,39 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (rect) {
+      const posX = Math.max(8, Math.min(rect.width - 180, e.clientX - rect.left));
+      const posY = Math.max(8, Math.min(rect.height - 140, e.clientY - rect.top));
+      setContextMenuPos({ x: posX, y: posY });
+    } else {
+      setContextMenuPos({ x: 12, y: 12 });
+    }
+  };
+
+  const handleCopyImage = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setContextMenuPos(null);
+    if (firstItem?.localPath) {
+      await window.flik?.copyImage(firstItem.localPath);
+    }
+  };
+
+  const handleViewInFolder = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setContextMenuPos(null);
     if (firstItem?.localPath) {
       window.flik?.showInFolder(firstItem.localPath);
     }
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setContextMenuPos(null);
+    if (firstItem?.localPath) {
+      window.flik?.deleteFiles([firstItem.localPath]);
+    }
+    onDismiss(card.id);
   };
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -595,6 +646,31 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                 {firstItem?.size ? `${(firstItem.size / (1024 * 1024)).toFixed(1)} MB` : 'Received File'}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Context Menu Dropdown */}
+        {contextMenuPos && (
+          <div
+            className="flik-context-menu"
+            style={{
+              left: `${contextMenuPos.x}px`,
+              top: `${contextMenuPos.y}px`,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isImage && (
+              <button className="flik-context-menu-item" onClick={handleCopyImage}>
+                <span>📋</span> Copy Image
+              </button>
+            )}
+            <button className="flik-context-menu-item" onClick={handleViewInFolder}>
+              <span>📁</span> View in Folder
+            </button>
+            <div className="flik-context-menu-divider" />
+            <button className="flik-context-menu-item danger" onClick={handleDelete}>
+              <span>🗑️</span> Delete
+            </button>
           </div>
         )}
 

@@ -39,6 +39,11 @@ const flikApi = {
     ipcRenderer.send('flik:show-in-folder', filePath);
   },
 
+  // Copies image file to system clipboard
+  copyImage: async (filePath: string): Promise<boolean> => {
+    return await ipcRenderer.invoke('flik:copy-image', filePath);
+  },
+
   // Prompts native folder picker to save stacked cards into a permanent folder
   saveFilesToFolder: async (filePaths: string[]): Promise<boolean> => {
     return await ipcRenderer.invoke('flik:save-files-to-folder', filePaths);

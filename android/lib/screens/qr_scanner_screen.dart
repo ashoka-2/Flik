@@ -57,8 +57,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   void _initScanner() {
     try {
       _controller = MobileScannerController(
+        facing: CameraFacing.back,
         formats: const [BarcodeFormat.qrCode],
         detectionSpeed: DetectionSpeed.noDuplicates,
+        returnImage: false,
       );
 
       if (mounted) {
@@ -80,8 +82,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   Future<void> _retryCamera() async {
     setState(() => _isChecking = true);
     try {
+      await _controller?.stop();
       await _controller?.dispose();
     } catch (_) {}
+    _controller = null;
     await Future.delayed(const Duration(milliseconds: 300));
     _initScanner();
   }

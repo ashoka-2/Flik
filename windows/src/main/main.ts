@@ -13,6 +13,7 @@ import {
   nativeImage,
   protocol,
   net,
+  clipboard,
 } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -660,6 +661,41 @@ class FlikConnectorApp {
       if (fs.existsSync(filePath)) {
         shell.showItemInFolder(filePath);
       }
+    });
+
+    // Copies image file to system clipboard with automatic HEIC decoding
+    ipcMain.handle('flik:copy-image', async (_event, filePath: string) => {
+      try {
+        if (!filePath || !fs.existsSync(filePath)) return false;
+        const ext = path.extname(filePath).toLowerCase();
+
+        let imageToCopy: Electron.NativeImage;
+        if (ext === '.heic' || ext === '.heif') {
+          try {
+            const heicConvert = require('heic-convert');
+            const buf = await fs.promises.readFile(filePath);
+            const jpegBuf = await heicConvert({
+              buffer: buf,
+              format: 'JPEG',
+              quality: 0.95,
+            });
+            imageToCopy = nativeImage.createFromBuffer(Buffer.from(jpegBuf));
+          } catch {
+            imageToCopy = nativeImage.createFromPath(filePath);
+          }
+        } else {
+          imageToCopy = nativeImage.createFromPath(filePath);
+        }
+
+        if (imageToCopy && !imageToCopy.isEmpty()) {
+          clipboard.writeImage(imageToCopy);
+          this.broadcastToOverlays('flik:toast', 'Image copied to clipboard!');
+          return true;
+        }
+      } catch (e) {
+        console.error('Failed copying image to clipboard:', e);
+      }
+      return false;
     });
 
     // Reads local image file into base64 data URL with automatic HEIC/HEIF decoding
