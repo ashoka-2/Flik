@@ -44,9 +44,12 @@ export class FlikReceiverServer extends EventEmitter {
   private activeTransferId: string | null = null;
   private activeStreams: fs.WriteStream[] = [];
   private connectedClients: Map<string, { deviceId: string; deviceName: string; ip: string; port: number; platform: string; lastSeen: number }> = new Map();
+  private clientPruneInterval: NodeJS.Timeout | null = null;
 
   public getConnectedClients() {
-    return Array.from(this.connectedClients.values());
+    const now = Date.now();
+    // Return only active clients seen within the last 20 seconds
+    return Array.from(this.connectedClients.values()).filter((c) => now - c.lastSeen < 20000);
   }
 
   public registerClient(client: { deviceId: string; deviceName: string; ip: string; port?: number; platform?: string }) {
@@ -69,6 +72,22 @@ export class FlikReceiverServer extends EventEmitter {
     this.app = express();
     this.setupMiddleware();
     this.setupRoutes();
+
+    // 4-second pruning loop: automatically remove clients that haven't sent a heartbeat for > 15s
+    this.clientPruneInterval = setInterval(() => {
+      const now = Date.now();
+      let changed = false;
+      for (const [id, client] of this.connectedClients.entries()) {
+        if (now - client.lastSeen > 18000) {
+          this.connectedClients.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.emit('clients-updated', this.getConnectedClients());
+      }
+    }, 4000);
+
     this.initTempDir();
   }
 
@@ -218,6 +237,16 @@ export class FlikReceiverServer extends EventEmitter {
         deviceName: this.store.getDeviceName(),
         token,
       });
+    });
+
+    // GET /heartbeat - Keepalive ping from connected phone or client
+    this.app.get('/heartbeat', (req: Request, res: Response) => {
+      const deviceId = (req.headers['x-flik-device-id'] as string) || (req.query.deviceId as string);
+      if (deviceId && this.connectedClients.has(deviceId)) {
+        const client = this.connectedClients.get(deviceId)!;
+        client.lastSeen = Date.now();
+      }
+      res.status(200).json({ status: 'alive' });
     });
 
     // POST /url - Standard URL handler for mobile-to-PC link sharing
@@ -596,6 +625,10 @@ export class FlikReceiverServer extends EventEmitter {
 
   // Stops server and cleans up temporary files on application exit
   public stop(): void {
+    if (this.clientPruneInterval) {
+      clearInterval(this.clientPruneInterval);
+      this.clientPruneInterval = null;
+    }
     if (this.server) {
       this.server.close();
       this.server = null;

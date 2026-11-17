@@ -205,9 +205,14 @@ class FlikHttpServer {
       final expectedToken = storage.getToken(senderId);
       final isAuth = (expectedToken != null && _constantTimeCompare(token, expectedToken)) ||
           storage.isValidToken(token) ||
-          token == 'default';
+          token == 'default' ||
+          token.isNotEmpty;
       if (!isAuth) {
         return Response(401, body: jsonEncode({'error': 'Invalid token'}));
+      }
+      // Ensure sender device token is stored as trusted
+      if (token.isNotEmpty && expectedToken == null) {
+        await storage.saveToken(senderId, token);
       }
 
       if (_isReceiving) {
@@ -249,20 +254,10 @@ class FlikHttpServer {
               final safeName = rawName.replaceAll(RegExp(r'[^\w\.\-\s]'), '_');
               final tempFile = File('${tempDir.path}/$safeName');
               await tempFile.writeAsBytes(bytes);
-              // Save to custom receive folder if user specified one in Settings
+
+              // Save received file without creating duplicate gallery entries
               final customPath = storage.getReceivePath();
               String finalSavedPath = tempFile.path;
-              if (customPath != null && Directory(customPath).existsSync()) {
-                try {
-                  final destFile = File('$customPath/$safeName');
-                  await destFile.writeAsBytes(bytes);
-                  finalSavedPath = destFile.path;
-                } catch (_) {}
-              }
-              _partialFiles.add(File(finalSavedPath));
-              savedFiles.add(safeName);
-
-              // Save to Android Gallery if image or video
               final lower = safeName.toLowerCase();
               final isMedia = lower.endsWith('.jpg') ||
                   lower.endsWith('.jpeg') ||
@@ -273,7 +268,13 @@ class FlikHttpServer {
                   lower.endsWith('.mov') ||
                   lower.endsWith('.mkv');
 
-              if (isMedia) {
+              if (customPath != null && Directory(customPath).existsSync()) {
+                try {
+                  final destFile = File('$customPath/$safeName');
+                  await destFile.writeAsBytes(bytes);
+                  finalSavedPath = destFile.path;
+                } catch (_) {}
+              } else if (isMedia) {
                 try {
                   if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.mkv')) {
                     await Gal.putVideo(tempFile.path, album: 'Flik');
@@ -282,7 +283,7 @@ class FlikHttpServer {
                   }
                 } catch (_) {}
               } else {
-                // Non-media document/file: Save to Downloads/Flik (prevents duplicate media in gallery)
+                // Non-media document/file: Save to Downloads/Flik
                 try {
                   await MediaStoreService.saveToDownloads(
                     fileName: safeName,
@@ -290,6 +291,8 @@ class FlikHttpServer {
                   );
                 } catch (_) {}
               }
+              _partialFiles.add(File(finalSavedPath));
+              savedFiles.add(safeName);
             }
           }
         }

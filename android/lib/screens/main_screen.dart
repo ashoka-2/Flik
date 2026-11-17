@@ -81,7 +81,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   void _processRawShareData(Map<String, dynamic> data) async {
     final notifier = ref.read(flikAppProvider.notifier);
-    final state = ref.read(flikAppProvider);
 
     final text = data['text'] as String?;
     final files = (data['files'] as List?)?.map((e) => e.toString()).toList() ?? [];
@@ -93,11 +92,23 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       final isUrl = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
 
       if (isUrl) {
-        if (state.peers.isNotEmpty) {
-          notifier.showToast('Sending link to ${state.peers.first.deviceName}...');
-          final success = await notifier.sendUrl(rawUrl, title: uri.host);
+        // Wait up to 3 seconds for peer discovery when cold-launching from Instagram / YouTube share
+        var currentPeers = ref.read(flikAppProvider).peers;
+        if (currentPeers.isEmpty) {
+          notifier.showToast('Connecting to PC to open link...');
+          for (int i = 0; i < 12; i++) {
+            await Future.delayed(const Duration(milliseconds: 250));
+            currentPeers = ref.read(flikAppProvider).peers;
+            if (currentPeers.isNotEmpty) break;
+          }
+        }
+
+        if (currentPeers.isNotEmpty) {
+          final target = currentPeers.first;
+          notifier.showToast('Sending link to ${target.deviceName}...');
+          final success = await notifier.sendUrl(rawUrl, title: uri.host.isNotEmpty ? uri.host : 'Shared Link');
           if (success) {
-            notifier.showToast('Opened link on ${state.peers.first.deviceName}!');
+            notifier.showToast('Opened link on ${target.deviceName}!');
           }
         } else {
           notifier.stageItems([
@@ -111,7 +122,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             ),
           ]);
           setState(() => _currentTabIndex = 2); // Files & Links tab
-          notifier.showToast('No PC connected. Link staged in Files & Links!');
+          notifier.showToast('Link staged in Files & Links. Connect device and tap Send!');
         }
       }
     }
@@ -151,7 +162,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   void _processSharedMedia(SharedMedia media) async {
     final notifier = ref.read(flikAppProvider.notifier);
-    final state = ref.read(flikAppProvider);
 
     // 1. Process shared Web URL (e.g. from Chrome, Edge, Brave, YouTube, Instagram reels/posts)
     if (media.content != null && media.content!.trim().isNotEmpty) {
@@ -162,9 +172,24 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       final isUrl = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
 
       if (isUrl) {
-        if (state.peers.isNotEmpty) {
-          notifier.showToast('Sending link to ${state.peers.first.deviceName}...');
-          await notifier.sendUrl(rawUrl, title: 'Shared Link');
+        // Wait up to 3 seconds for peer discovery when cold-launching from Instagram / YouTube share
+        var currentPeers = ref.read(flikAppProvider).peers;
+        if (currentPeers.isEmpty) {
+          notifier.showToast('Connecting to PC to open link...');
+          for (int i = 0; i < 12; i++) {
+            await Future.delayed(const Duration(milliseconds: 250));
+            currentPeers = ref.read(flikAppProvider).peers;
+            if (currentPeers.isNotEmpty) break;
+          }
+        }
+
+        if (currentPeers.isNotEmpty) {
+          final target = currentPeers.first;
+          notifier.showToast('Sending link to ${target.deviceName}...');
+          final success = await notifier.sendUrl(rawUrl, title: uri.host.isNotEmpty ? uri.host : 'Shared Link');
+          if (success) {
+            notifier.showToast('Opened link on ${target.deviceName}!');
+          }
         } else {
           notifier.stageItems([
             TransferItem(
@@ -177,7 +202,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             ),
           ]);
           setState(() => _currentTabIndex = 2); // Files & Links tab
-          notifier.showToast('No PC connected. Link staged in Files & Links!');
+          notifier.showToast('Link staged in Files & Links. Connect device and tap Send!');
         }
       }
     }

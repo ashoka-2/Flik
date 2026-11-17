@@ -14,6 +14,7 @@ import {
   protocol,
   net,
   clipboard,
+  globalShortcut,
 } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -50,6 +51,7 @@ class FlikConnectorApp {
   private appIcon: any = null;
   private interactiveRects: Map<number, InteractiveRect[]> = new Map();
   private cursorPollTimer: NodeJS.Timeout | null = null;
+  private isFullscreenActive: boolean = false;
   private tempWorkspace: string;
   private localIp: string = '127.0.0.1';
   private boundPort: number = FLIK_CONSTANTS.DEFAULT_PORT;
@@ -343,6 +345,11 @@ class FlikConnectorApp {
   private startCursorPolling(): void {
     if (this.cursorPollTimer) return;
     this.cursorPollTimer = setInterval(() => {
+      // If expanded theater video is currently displayed, never lock or forward mouse events
+      if (this.isFullscreenActive) {
+        return;
+      }
+
       const cursor = screen.getCursorScreenPoint();
       let hasAnyRects = false;
 
@@ -601,11 +608,22 @@ class FlikConnectorApp {
     ipcMain.on('flik:set-fullscreen-mode', (event, active: boolean) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win || win.isDestroyed()) return;
+      this.isFullscreenActive = active;
       if (active) {
         win.setIgnoreMouseEvents(false);
         win.focus();
         win.setAlwaysOnTop(true, 'floating');
+        try {
+          globalShortcut.register('Escape', () => {
+            this.isFullscreenActive = false;
+            try { globalShortcut.unregister('Escape'); } catch {}
+            win.webContents.send('flik:force-exit-fullscreen');
+            win.setIgnoreMouseEvents(true, { forward: true });
+            win.setAlwaysOnTop(true, 'screen-saver');
+          });
+        } catch {}
       } else {
+        try { globalShortcut.unregister('Escape'); } catch {}
         win.setIgnoreMouseEvents(true, { forward: true });
         win.setAlwaysOnTop(true, 'screen-saver');
       }
@@ -1018,6 +1036,9 @@ class FlikConnectorApp {
 
   // Clean up server, mDNS, and temp files on quit
   private cleanup(): void {
+    try {
+      globalShortcut.unregisterAll();
+    } catch {}
     if (this.cursorPollTimer) {
       clearInterval(this.cursorPollTimer);
       this.cursorPollTimer = null;

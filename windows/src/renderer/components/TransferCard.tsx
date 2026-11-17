@@ -233,7 +233,8 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
     return `${m}:${s < 10 ? '0' + s : s}`;
   };
 
-  const mediaUrl = imgSrc || (firstItem?.localPath ? `http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}` : '');
+  const isHeic = ext === 'heic' || ext === 'heif';
+  const mediaUrl = imgSrc || (!isHeic && firstItem?.localPath ? `http://127.0.0.1:54321/media?file=${encodeURIComponent(firstItem.localPath)}` : '');
 
   return (
     <>
@@ -507,20 +508,20 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
           />
         )}
 
-        {/* 3b. Fallback Card if Image Failed or is HEIC not decoded in browser */}
-        {isImage && (imgError || !mediaUrl) && (
+        {/* 3b. Fallback Card if Image Failed, or HEIC is not decoded */}
+        {isImage && (imgError || (!mediaUrl && !imgSrc)) && (
           <div
             style={{
-              width: 280,
-              padding: 16,
-              background: '#151515',
-              borderRadius: 18,
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.65)',
+              width: 320,
+              padding: 18,
+              background: '#20201E',
+              borderRadius: 20,
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              boxShadow: '0 24px 54px rgba(0, 0, 0, 0.7)',
               display: 'flex',
               flexDirection: 'column',
-              gap: 12,
-              color: '#fff',
+              gap: 14,
+              color: '#ffffff',
               cursor: 'pointer',
             }}
             onClick={() => firstItem?.localPath && window.flik?.openFile(firstItem.localPath)}
@@ -530,16 +531,21 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                 style={{
                   width: 44,
                   height: 44,
-                  borderRadius: 12,
+                  borderRadius: '50%',
                   background: 'rgba(53, 102, 239, 0.15)',
                   border: '1px solid rgba(53, 102, 239, 0.35)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 22,
+                  color: '#3566EF',
+                  flexShrink: 0,
                 }}
               >
-                🖼️
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
@@ -549,11 +555,12 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    color: '#ffffff',
                   }}
                 >
-                  {firstItem?.name || 'Image'}
+                  {firstItem?.name || 'Photo'}
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: '#888888', marginTop: 2 }}>
                   {firstItem?.size ? `${(firstItem.size / (1024 * 1024)).toFixed(1)} MB • ` : ''}
                   {(ext || 'img').toUpperCase()} Photo
                 </div>
@@ -563,11 +570,11 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
             <button
               style={{
                 width: '100%',
-                padding: '8px 12px',
-                borderRadius: 999,
+                padding: '9px 14px',
+                borderRadius: 9999,
                 background: '#3566EF',
                 border: 'none',
-                color: '#fff',
+                color: '#ffffff',
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
@@ -582,7 +589,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                 if (firstItem?.localPath) window.flik?.openFile(firstItem.localPath);
               }}
             >
-              <span>👁️</span> Click to view photo
+              <span>Click to view photo</span>
             </button>
           </div>
         )}

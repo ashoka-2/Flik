@@ -19,13 +19,63 @@ class ConnectionPoolService {
   final Dio _dio = Dio();
   bool _isScanning = false;
   Timer? _hotspotFallbackTimer;
+  Timer? _heartbeatTimer;
+  final Map<String, int> _consecutiveFailures = {};
 
   Stream<List<DiscoveredPeer>> get peersStream => _peersController.stream;
   List<DiscoveredPeer> get currentPeers => _peers.values.toList();
 
   void addOrUpdatePeer(DiscoveredPeer peer) {
     _peers[peer.deviceId] = peer;
+    _consecutiveFailures[peer.deviceId] = 0;
     _peersController.add(_peers.values.toList());
+  }
+
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (_peers.isEmpty) return;
+      final peersList = _peers.values.toList();
+      bool changed = false;
+
+      for (final peer in peersList) {
+        try {
+          final res = await _dio.get(
+            'http://${peer.ip}:${peer.port}/heartbeat',
+            options: Options(
+              receiveTimeout: const Duration(seconds: 3),
+              sendTimeout: const Duration(seconds: 3),
+              headers: {
+                'X-Flik-Device-Id': storage.getDeviceId(),
+              },
+            ),
+          );
+          if (res.statusCode == 200) {
+            _consecutiveFailures[peer.deviceId] = 0;
+          } else {
+            final fails = (_consecutiveFailures[peer.deviceId] ?? 0) + 1;
+            _consecutiveFailures[peer.deviceId] = fails;
+            if (fails >= 3) {
+              _peers.remove(peer.deviceId);
+              _consecutiveFailures.remove(peer.deviceId);
+              changed = true;
+            }
+          }
+        } catch (_) {
+          final fails = (_consecutiveFailures[peer.deviceId] ?? 0) + 1;
+          _consecutiveFailures[peer.deviceId] = fails;
+          if (fails >= 3) {
+            _peers.remove(peer.deviceId);
+            _consecutiveFailures.remove(peer.deviceId);
+            changed = true;
+          }
+        }
+      }
+
+      if (changed) {
+        _peersController.add(_peers.values.toList());
+      }
+    });
   }
 
   ConnectionPoolService({required this.storage});
@@ -91,6 +141,8 @@ class ConnectionPoolService {
         scanLocalSubnet();
       }
     });
+
+    _startHeartbeat();
   }
 
   // Scans local /24 subnet across Flik ports (54321-54330) in parallel with short timeouts
@@ -280,6 +332,7 @@ class ConnectionPoolService {
   Future<void> stop() async {
     _isScanning = false;
     _hotspotFallbackTimer?.cancel();
+    _heartbeatTimer?.cancel();
     try {
       await _discovery?.stop();
     } catch (_) {}

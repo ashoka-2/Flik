@@ -350,6 +350,20 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
       return;
     }
 
+    // If single staged item is a URL/web link, stream via sendUrl so it opens in PC browser
+    if (state.stagedItems.length == 1 &&
+        (state.stagedItems.first.url != null ||
+         state.stagedItems.first.mime == 'text/uri-list' ||
+         state.stagedItems.first.name.startsWith('http://') ||
+         state.stagedItems.first.name.startsWith('https://'))) {
+      final linkUrl = state.stagedItems.first.url ?? state.stagedItems.first.name;
+      final success = await sendUrl(linkUrl, title: state.stagedItems.first.name);
+      if (success) {
+        clearStaging();
+      }
+      return;
+    }
+
     // Determine target: locked peer or first peer or all peers
     final targetPeers = state.lockedPeerId != null
         ? state.peers.where((p) => p.deviceId == state.lockedPeerId).toList()

@@ -164,7 +164,11 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
           }
         }
 
-        others.removeWhere((a) => a.id == allAlbum.id || a.isAll || ['all', 'recent', 'recents', 'all photos', 'recent photos'].contains(a.name.trim().toLowerCase()));
+        others.removeWhere((a) =>
+            a.id == allAlbum.id ||
+            a.isAll ||
+            (foundVideos != null && a.id == foundVideos.id) ||
+            ['all', 'recent', 'recents', 'all photos', 'recent photos'].contains(a.name.trim().toLowerCase()));
 
         // Guarantee dedicated full-device Videos album if available
         if (videoAlbums.isNotEmpty) {
@@ -250,24 +254,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
   Future<void> _reloadCurrentView() async {
     PhotoManager.clearFileCache();
-    if (_isAlbumsView) {
-      await _loadAlbums();
-    } else {
-      if (_selectedAlbum != null) {
-        final list = await _selectedAlbum!.getAssetListPaged(page: 0, size: _pageSize);
-        _applySort(list);
-        if (mounted) {
-          setState(() {
-            _assets = list;
-            _currentPage = 0;
-            _hasMore = list.length >= _pageSize;
-            _isLoading = false;
-          });
-        }
-      } else {
-        await _loadAlbums();
-      }
-    }
+    await _loadAlbums();
   }
 
   Future<void> _switchAlbum(AssetPathEntity album) async {
@@ -597,9 +584,18 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
         ? primaryAlbums
         : primaryAlbums.where((a) => a.name.toLowerCase().contains(_searchQuery)).toList();
 
+    final primaryIds = primaryAlbums.map((a) => a.id).toSet();
+    final primaryNames = primaryAlbums.map((a) => _formatAlbumName(a).toLowerCase()).toSet();
+    final uniqueOthers = _moreAlbums.where((a) {
+      if (primaryIds.contains(a.id) || a.isAll) return false;
+      final formatted = _formatAlbumName(a).toLowerCase();
+      if (primaryNames.contains(formatted) || formatted == 'all') return false;
+      return true;
+    }).toList();
+
     final filteredOthers = _searchQuery.isEmpty
-        ? _moreAlbums
-        : _moreAlbums.where((a) => a.name.toLowerCase().contains(_searchQuery)).toList();
+        ? uniqueOthers
+        : uniqueOthers.where((a) => a.name.toLowerCase().contains(_searchQuery)).toList();
 
     return RefreshIndicator(
       onRefresh: _reloadCurrentView,
@@ -717,6 +713,10 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
   }
 
   String _formatAlbumName(AssetPathEntity album) {
+    if (album.id == _albumVideos?.id) return 'Videos';
+    if (album.id == _albumCamera?.id) return 'Camera';
+    if (album.id == _albumFavorites?.id) return 'Favorites';
+    if (album.id == _albumScreenshots?.id) return 'Screenshots';
     if (album.id == _albumAll?.id || album.isAll) return 'All';
     final name = album.name;
     final lower = name.toLowerCase();

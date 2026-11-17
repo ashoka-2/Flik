@@ -196,6 +196,17 @@ class _FilesAndLinksTabState extends ConsumerState<FilesAndLinksTab> {
                       ],
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 18, color: FlikTokens.muted),
+                    tooltip: 'Reload & check clipboard',
+                    onPressed: () {
+                      _checkClipboard();
+                      setState(() {
+                        _pickedFiles.clear();
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 4),
                   ElevatedButton.icon(
                     onPressed: _pickFiles,
                     icon: const Icon(Icons.add, size: 16),
@@ -259,7 +270,18 @@ class _FilesAndLinksTabState extends ConsumerState<FilesAndLinksTab> {
                       child: const Text('Stage (Flik to Send)', style: TextStyle(color: FlikTokens.text, fontSize: 12)),
                     ),
                     const Spacer(),
-                    ElevatedButton.icon(
+                    IconButton(
+                    icon: const Icon(Icons.refresh, size: 18, color: FlikTokens.muted),
+                    tooltip: 'Reload & check clipboard',
+                    onPressed: () {
+                      _checkClipboard();
+                      setState(() {
+                        _pickedFiles.clear();
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 4),
+                  ElevatedButton.icon(
                       onPressed: _sendPickedFilesDirectly,
                       icon: const Icon(Icons.arrow_upward, size: 16),
                       label: const Text('Send Directly'),
