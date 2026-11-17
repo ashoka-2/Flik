@@ -159,6 +159,132 @@ body {
   background: rgba(239, 68, 68, 0.85);
 }
 
+/* Minimal AI UI Audio Player Card */
+.flik-audio-card {
+  width: 320px;
+  padding: 16px;
+  background: var(--surface);
+  border-radius: var(--radius-group);
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--text);
+  user-select: none;
+}
+
+.audio-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.audio-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-soft);
+  flex-shrink: 0;
+}
+
+.audio-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.audio-title {
+  font-size: var(--type-body-s);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.audio-sub {
+  font-size: var(--type-caption);
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.audio-slider-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.audio-slider {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+}
+
+.audio-time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.audio-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.audio-btn-step {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  width: 34px;
+  height: 34px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.audio-btn-step:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.audio-btn-play {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-pill);
+  width: 44px;
+  height: 44px;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(53, 102, 239, 0.45);
+  transition: transform var(--motion-fast) ease, background var(--motion-fast) ease;
+}
+
+.audio-btn-play:hover {
+  transform: scale(1.04);
+}
+
+.audio-btn-play:active {
+  transform: scale(0.96);
+}
+
 /* Card Geometry & Aesthetics */
 .flik-card {
   position: absolute;

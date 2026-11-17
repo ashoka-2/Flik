@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../theme/tokens.dart';
 
-// High-speed in-memory cached thumbnail widget for ultra-smooth 120fps gallery scrolling.
+// High-speed memory-optimized thumbnail widget for silky smooth 120fps scrolling on both low-end and flagship devices.
 class FlikThumbnailImage extends StatefulWidget {
   final AssetEntity asset;
   final ThumbnailSize size;
@@ -12,16 +12,20 @@ class FlikThumbnailImage extends StatefulWidget {
   const FlikThumbnailImage({
     super.key,
     required this.asset,
-    this.size = const ThumbnailSize.square(360),
+    this.size = const ThumbnailSize.square(220),
     this.fit = BoxFit.cover,
   });
+
+  static void clearCache() {
+    _FlikThumbnailImageState._memoryCache.clear();
+  }
 
   @override
   State<FlikThumbnailImage> createState() => _FlikThumbnailImageState();
 }
 
 class _FlikThumbnailImageState extends State<FlikThumbnailImage> {
-  // Static LRU-like memory cache for decoded thumbnail bytes
+  // Static bounded memory cache for decoded thumbnail bytes
   static final Map<String, Uint8List> _memoryCache = {};
   Uint8List? _bytes;
 
@@ -48,8 +52,8 @@ class _FlikThumbnailImageState extends State<FlikThumbnailImage> {
 
     widget.asset.thumbnailDataWithSize(widget.size).then((data) {
       if (data != null) {
-        // Prevent unbounded cache growth
-        if (_memoryCache.length > 500) {
+        // Prevent unbounded cache growth on low-end devices
+        if (_memoryCache.length > 250) {
           _memoryCache.remove(_memoryCache.keys.first);
         }
         _memoryCache[widget.asset.id] = data;
@@ -66,7 +70,18 @@ class _FlikThumbnailImageState extends State<FlikThumbnailImage> {
       return Image.memory(
         _bytes!,
         fit: widget.fit,
+        cacheWidth: 220,
+        cacheHeight: 220,
         gaplessPlayback: true,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded) return child;
+          return AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            child: child,
+          );
+        },
       );
     }
 
@@ -74,8 +89,8 @@ class _FlikThumbnailImageState extends State<FlikThumbnailImage> {
       color: FlikTokens.raised,
       child: const Center(
         child: SizedBox(
-          width: 16,
-          height: 16,
+          width: 14,
+          height: 14,
           child: CircularProgressIndicator(strokeWidth: 1.5, color: FlikTokens.line),
         ),
       ),

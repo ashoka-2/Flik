@@ -28,7 +28,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   const [isExpandedVideo, setIsExpandedVideo] = useState<boolean>(false);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
 
-  const ext = firstItem?.name ? firstItem.name.split('.').pop()?.toLowerCase() : '';
+  const ext: string = (firstItem?.name ? firstItem.name.split('.').pop()?.toLowerCase() : '') || '';
   const isVideo = firstItem?.kind === 'video' || firstItem?.mime?.startsWith('video/') || ['mp4', 'mkv', 'mov', 'avi', 'webm', '3gp'].includes(ext || '');
   const isAudio = firstItem?.kind === 'audio' || firstItem?.mime?.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus'].includes(ext || '');
   const isImage = firstItem?.kind === 'image' || firstItem?.mime?.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic', 'heif'].includes(ext || '');
@@ -408,20 +408,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
 
         {/* 2. Audio Player conforming to minimal-ai-ui (neutral surfaces, #3566EF accent, pill geometry) */}
         {isAudio && firstItem?.localPath && (
-          <div
-            style={{
-              width: 310,
-              padding: 16,
-              background: '#151515',
-              borderRadius: 20,
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.65)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              color: '#fff',
-            }}
-          >
+          <div className="flik-audio-card">
             <audio
               ref={audioRef}
               src={mediaUrl}
@@ -430,44 +417,29 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
               onEnded={() => setIsPlaying(false)}
             />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 12,
-                  background: 'rgba(53, 102, 239, 0.15)',
-                  border: '1px solid rgba(53, 102, 239, 0.35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 22,
-                }}
-              >
-                🎵
+            <div className="audio-header">
+              <div className="audio-art">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18V5l12-2v13" />
+                  <circle cx="6" cy="18" r="3" />
+                  <circle cx="18" cy="16" r="3" />
+                </svg>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
+              <div className="audio-meta">
+                <div className="audio-title">
                   {firstItem.name}
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
+                <div className="audio-sub">
                   Audio Track • {(firstItem.size / (1024 * 1024)).toFixed(1)} MB
                 </div>
               </div>
             </div>
 
             {/* Progress Slider */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className="audio-slider-wrap">
               <input
                 type="range"
+                className="audio-slider"
                 min={0}
                 max={duration || 100}
                 value={currentTime}
@@ -476,78 +448,48 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                   setCurrentTime(val);
                   if (audioRef.current) audioRef.current.currentTime = val;
                 }}
-                style={{
-                  width: '100%',
-                  height: 4,
-                  accentColor: '#3566EF',
-                  cursor: 'pointer',
-                }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#888' }}>
+              <div className="audio-time-row">
                 <span>{formatTime(currentTime)}</span>
                 <span>{formatTime(duration)}</span>
               </div>
             </div>
 
             {/* Minimal AI UI Audio Controls (Pill Geometry) */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+            <div className="audio-controls-row">
               <button
+                className="audio-btn-step"
                 onClick={(e) => seekAudio(-5, e)}
-                style={{
-                  background: '#20201E',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: 999,
-                  width: 32,
-                  height: 32,
-                  color: '#fff',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
                 title="Rewind 5s"
               >
-                ⏮
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11 5L3 12l8 7V5zm10 0l-8 7 8 7V5z" />
+                </svg>
               </button>
               <button
+                className="audio-btn-play"
                 onClick={toggleAudioPlay}
-                style={{
-                  background: '#3566EF',
-                  border: 'none',
-                  borderRadius: 999,
-                  width: 42,
-                  height: 42,
-                  color: '#fff',
-                  fontSize: 16,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 14px rgba(53, 102, 239, 0.45)',
-                }}
                 title={isPlaying ? 'Pause' : 'Play'}
               >
-                {isPlaying ? '⏸' : '▶'}
+                {isPlaying ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}>
+                    <path d="M5 3l14 9-14 9V3z" />
+                  </svg>
+                )}
               </button>
               <button
+                className="audio-btn-step"
                 onClick={(e) => seekAudio(5, e)}
-                style={{
-                  background: '#20201E',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: 999,
-                  width: 32,
-                  height: 32,
-                  color: '#fff',
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
                 title="Fast Forward 5s"
               >
-                ⏭
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13 5v14l8-7-8-7zm-10 0v14l8-7-8-7z" />
+                </svg>
               </button>
             </div>
           </div>
@@ -613,7 +555,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                 </div>
                 <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                   {firstItem?.size ? `${(firstItem.size / (1024 * 1024)).toFixed(1)} MB • ` : ''}
-                  {ext.toUpperCase()} Photo
+                  {(ext || 'img').toUpperCase()} Photo
                 </div>
               </div>
             </div>

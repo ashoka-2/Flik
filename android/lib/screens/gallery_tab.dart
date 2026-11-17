@@ -761,6 +761,9 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(6),
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: true,
+            cacheExtent: 600,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
               crossAxisSpacing: 4,
@@ -780,33 +783,34 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
             final asset = displayedAssets[index];
             final isSelected = _selectedAssetIds.contains(asset.id);
 
-            return GestureDetector(
-              onTap: () {
-                if (_selectedAssetIds.isNotEmpty) {
-                  _toggleSelection(asset);
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MediaViewerScreen(
-                        assets: displayedAssets,
-                        initialIndex: index,
+            return RepaintBoundary(
+              child: GestureDetector(
+                onTap: () {
+                  if (_selectedAssetIds.isNotEmpty) {
+                    _toggleSelection(asset);
+                  } else {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MediaViewerScreen(
+                          assets: displayedAssets,
+                          initialIndex: index,
+                        ),
+                      ),
+                    );
+                  }
+                },
+                onLongPress: () => _toggleSelection(asset),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Hero(
+                      tag: 'media_${asset.id}',
+                      child: FlikThumbnailImage(
+                        asset: asset,
+                        size: const ThumbnailSize.square(220),
                       ),
                     ),
-                  );
-                }
-              },
-              onLongPress: () => _toggleSelection(asset),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Hero(
-                    tag: 'media_${asset.id}',
-                    child: FlikThumbnailImage(
-                      asset: asset,
-                      size: const ThumbnailSize.square(240),
-                    ),
-                  ),
 
                   // Video Duration Badge
                   if (asset.type == AssetType.video)
@@ -850,9 +854,10 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
                     ),
                 ],
               ),
-            );
-          },
-        );
+            ),
+          );
+        },
+      );
       },
     ),
   );

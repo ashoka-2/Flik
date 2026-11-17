@@ -209,11 +209,14 @@ export const TrayWindow: React.FC = () => {
 
         <button
           className="btn-pill"
-          style={{ width: 30, height: 30, padding: 0, fontSize: 13 }}
+          style={{ width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           title="Minimize to Tray"
           onClick={() => window.flik?.closeDashboard?.()}
         >
-          ✕
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
         </button>
       </div>
 
@@ -221,30 +224,35 @@ export const TrayWindow: React.FC = () => {
       {peers.length > 0 && (
         <div
           style={{
-            padding: '10px 12px',
-            borderRadius: 12,
-            background: 'rgba(34, 197, 94, 0.12)',
-            border: '1px solid rgba(34, 197, 94, 0.35)',
+            padding: '12px 14px',
+            borderRadius: 16,
+            background: 'var(--surface)',
+            border: '1px solid var(--line)',
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Connected Phone
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Connected Phone
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
               {activeTargetPeer?.ip}:{activeTargetPeer?.port || 54321}
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16 }}>📱</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 10, background: 'var(--raised)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-soft)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                <line x1="12" y1="18" x2="12.01" y2="18"></line>
+              </svg>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
               {activeTargetPeer?.deviceName || 'Android Phone'}
-            </span>
-            <span style={{ fontSize: 10, background: '#22c55e', color: '#000', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
-              ONLINE
             </span>
           </div>
         </div>
@@ -253,14 +261,14 @@ export const TrayWindow: React.FC = () => {
       {/* QR Code Section (Collapsible if phone is connected) */}
       <div
         style={{
-          borderRadius: 12,
+          borderRadius: 16,
           background: 'var(--surface)',
           border: '1px solid var(--line)',
-          padding: 12,
+          padding: 14,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 8,
+          gap: 10,
         }}
       >
         <div
@@ -276,22 +284,22 @@ export const TrayWindow: React.FC = () => {
           <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
             Pair with Phone (QR & IP)
           </span>
-          <span style={{ fontSize: 11, color: 'var(--accentSoft)' }}>
+          <span style={{ fontSize: 11, color: 'var(--accent-soft)' }}>
             {showQr ? '▲ Hide' : '▼ Show QR'}
           </span>
         </div>
 
         {showQr && (
           <>
-            <canvas ref={canvasRef} className="qr-canvas" style={{ width: 140, height: 140 }}></canvas>
-            <p className="qr-instruction" style={{ fontSize: 11, margin: 0, textAlign: 'center' }}>
+            <canvas ref={canvasRef} className="qr-canvas" style={{ width: 140, height: 140, borderRadius: 12 }}></canvas>
+            <p className="qr-instruction" style={{ fontSize: 11, margin: 0, textAlign: 'center', color: 'var(--muted)' }}>
               Scan with Flik on your Android phone to pair instantly on local Wi-Fi.
             </p>
             <div
               style={{
                 width: '100%',
-                padding: '6px 10px',
-                borderRadius: 8,
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-pill)',
                 background: 'var(--raised)',
                 border: '1px solid var(--line)',
                 display: 'flex',
@@ -303,7 +311,7 @@ export const TrayWindow: React.FC = () => {
               <span style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Local IP
               </span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)', letterSpacing: 0.5 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-soft)', letterSpacing: 0.5, fontVariantNumeric: 'tabular-nums' }}>
                 {info ? `${info.ip}:${info.port}` : 'Detecting network...'}
               </span>
             </div>
@@ -314,13 +322,13 @@ export const TrayWindow: React.FC = () => {
       {/* Storage Destination Folder Configuration */}
       <div
         style={{
-          padding: '10px 12px',
-          borderRadius: 12,
-          background: 'var(--raised)',
+          padding: '12px 14px',
+          borderRadius: 16,
+          background: 'var(--surface)',
           border: '1px solid var(--line)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          gap: 8,
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -329,7 +337,7 @@ export const TrayWindow: React.FC = () => {
           </span>
           <button
             className="btn-pill"
-            style={{ height: 22, padding: '0 8px', fontSize: 11 }}
+            style={{ height: 26, padding: '0 12px', fontSize: 11 }}
             onClick={handleChooseFolder}
           >
             Change...
@@ -343,30 +351,36 @@ export const TrayWindow: React.FC = () => {
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             cursor: 'pointer',
-            padding: '4px 6px',
-            borderRadius: 6,
+            padding: '8px 12px',
+            borderRadius: 'var(--radius-pill)',
             background: 'var(--raised)',
             border: '1px solid var(--line)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
           }}
           title={storagePath ? `${storagePath} (Click to open)` : 'Click to select folder'}
           onClick={() => {
             if (storagePath) window.flik?.openFolder(storagePath);
           }}
         >
-          📁 {storagePath || 'Loading path...'}
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--accent-soft)', flexShrink: 0 }}>
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{storagePath || 'Loading path...'}</span>
         </div>
       </div>
 
       {/* Desktop Dropzone for Drag-and-Drop and File Sending to Phone */}
       <div
         style={{
-          padding: '16px 12px',
-          borderRadius: 12,
+          padding: '20px 14px',
+          borderRadius: 16,
           border: isDragOver ? '2px dashed var(--accent)' : '1px dashed var(--line)',
-          background: isDragOver ? 'rgba(53, 102, 239, 0.15)' : 'var(--raised)',
+          background: isDragOver ? 'rgba(53, 102, 239, 0.12)' : 'var(--surface)',
           cursor: 'pointer',
           textAlign: 'center',
-          transition: 'all 150ms ease',
+          transition: 'all var(--motion-fast) ease',
         }}
         onDragOver={(e) => {
           e.preventDefault();
@@ -393,12 +407,18 @@ export const TrayWindow: React.FC = () => {
             }
           }
         }}
-        onClick={(e) => {
+        onClick={() => {
           if (justDroppedRef.current) return;
           handleSendFileToPhone();
         }}
       >
-        <div style={{ fontSize: 22, marginBottom: 2 }}>📥</div>
+        <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--raised)', margin: '0 auto 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-soft)' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+        </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
           {isDragOver ? 'Drop files here!' : 'Drop files or click to send to phone'}
         </div>
@@ -412,19 +432,19 @@ export const TrayWindow: React.FC = () => {
       {/* Send Web Link to Phone */}
       <div
         style={{
-          padding: '10px 12px',
-          borderRadius: 12,
+          padding: '12px 14px',
+          borderRadius: 16,
           background: 'var(--surface)',
           border: '1px solid var(--line)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          gap: 8,
         }}
       >
         <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>
           Send Web Link to Phone
         </span>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <input
             type="text"
             placeholder="https://example.com"
@@ -434,16 +454,17 @@ export const TrayWindow: React.FC = () => {
             style={{
               flex: 1,
               fontSize: 12,
-              padding: '6px 10px',
-              borderRadius: 8,
+              padding: '8px 14px',
+              borderRadius: 'var(--radius-pill)',
               border: '1px solid var(--line)',
               background: 'var(--raised)',
               color: 'var(--text)',
+              outline: 'none',
             }}
           />
           <button
             className="btn-pill primary"
-            style={{ padding: '6px 12px', fontSize: 11 }}
+            style={{ padding: '0 16px', height: 34, fontSize: 12, flexShrink: 0 }}
             onClick={handleSendUrl}
           >
             Send Link
