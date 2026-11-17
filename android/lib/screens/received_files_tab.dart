@@ -99,14 +99,20 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
                     ],
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  itemCount: receivedEntries.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (context, idx) {
-                    final entry = receivedEntries[idx];
-                    return _buildReceivedCard(context, entry, notifier);
-                  },
+              : RefreshIndicator(
+                  onRefresh: () async => setState(() {}),
+                  color: FlikTokens.accentSoft,
+                  backgroundColor: FlikTokens.surface,
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    itemCount: receivedEntries.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final entry = receivedEntries[idx];
+                      return _buildReceivedCard(context, entry, notifier);
+                    },
+                  ),
                 ),
         ),
       ],

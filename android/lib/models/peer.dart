@@ -1,7 +1,7 @@
 // Represents a local peer device discovered on the Wi-Fi/Hotspot network.
 class DiscoveredPeer {
   final String deviceId;
-  final String deviceName;
+  String deviceName;
   final String platform; // 'android' or 'windows'
   final String ip;
   final int port;

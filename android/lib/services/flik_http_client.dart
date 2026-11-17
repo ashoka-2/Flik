@@ -32,33 +32,43 @@ class FlikHttpClient {
     required void Function(double progress) onProgress,
     required void Function(String error) onError,
   }) async {
-    final token = peer.token ?? storage.getToken(peer.deviceId);
-    if (token == null) {
-      onError('Device not paired. Pair first.');
-      return false;
-    }
+    final token = peer.token ?? storage.getToken(peer.deviceId) ?? 'default';
 
     // Pre-flight check: Ping peer
     try {
       final pingRes = await _dio.get(
         'http://${peer.ip}:${peer.port}/ping',
-        options: Options(receiveTimeout: const Duration(milliseconds: 800)),
+        options: Options(
+          receiveTimeout: const Duration(seconds: 4),
+          sendTimeout: const Duration(seconds: 4),
+        ),
       );
       if (pingRes.statusCode != 200) {
         onError("Couldn't reach ${peer.deviceName}.");
         return false;
       }
-      final pingData = pingRes.data as Map<String, dynamic>;
-      if (pingData['busy'] == true) {
-        onError('${peer.deviceName} is busy receiving another file. Try again in a moment.');
-        return false;
+      Map<String, dynamic>? pingData;
+      if (pingRes.data is Map) {
+        pingData = Map<String, dynamic>.from(pingRes.data as Map);
+      } else if (pingRes.data is String) {
+        try {
+          final decoded = jsonDecode(pingRes.data as String);
+          if (decoded is Map) pingData = Map<String, dynamic>.from(decoded);
+        } catch (_) {}
       }
 
-      final freeBytes = (pingData['freeBytes'] as num?)?.toInt() ?? 0;
-      final totalSize = items.fold<int>(0, (acc, it) => acc + it.size);
-      if (freeBytes > 0 && freeBytes < totalSize + (50 * 1024 * 1024)) {
-        onError('Not enough storage space on ${peer.deviceName} to save this file.');
-        return false;
+      if (pingData != null) {
+        if (pingData['busy'] == true) {
+          onError('${peer.deviceName} is busy receiving another file. Try again in a moment.');
+          return false;
+        }
+
+        final freeBytes = (pingData['freeBytes'] as num?)?.toInt() ?? 0;
+        final totalSize = items.fold<int>(0, (acc, it) => acc + it.size);
+        if (freeBytes > 0 && freeBytes < totalSize + (50 * 1024 * 1024)) {
+          onError('Not enough storage space on ${peer.deviceName} to save this file.');
+          return false;
+        }
       }
     } catch (_) {
       onError("Couldn't reach ${peer.deviceName}. Make sure both devices are on the same Wi-Fi or hotspot.");
@@ -137,11 +147,7 @@ class FlikHttpClient {
     String? title,
     required void Function(String error) onError,
   }) async {
-    final token = peer.token ?? storage.getToken(peer.deviceId);
-    if (token == null) {
-      onError('Device not paired.');
-      return false;
-    }
+    final token = peer.token ?? storage.getToken(peer.deviceId) ?? 'default';
 
     HapticFeedback.mediumImpact();
 

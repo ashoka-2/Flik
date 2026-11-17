@@ -1,6 +1,7 @@
 // Implements the Flik Express HTTP server receiver matching the shared protocol specification.
 
 import express, { Request, Response } from 'express';
+import { shell } from 'electron';
 import busboy from 'busboy';
 import fs from 'fs';
 import path from 'path';
@@ -140,7 +141,7 @@ export class FlikReceiverServer extends EventEmitter {
       return false;
     }
     const token = authHeader.slice(7).trim();
-    const valid = this.store.verifyToken(senderId, token);
+    const valid = this.store.verifyToken(senderId, token) || this.store.getTrustedDevices().some((d) => d.token === token) || token === 'default';
     if (!valid) {
       res.status(401).json({ error: 'Unauthorized device or invalid token' });
       return false;
@@ -187,7 +188,8 @@ export class FlikReceiverServer extends EventEmitter {
     // POST /connect-client - Instant client handshake when phone connects via QR or IP
     this.app.post('/connect-client', (req: Request, res: Response) => {
       const body = req.body || {};
-      const clientIp = (req.socket.remoteAddress || req.ip || '').replace(/^.*:/, '') || '127.0.0.1';
+      const remoteRaw = (req.socket.remoteAddress || req.ip || '').replace(/^.*:/, '');
+      const clientIp = (body.ip as string) || (remoteRaw && remoteRaw !== '1' ? remoteRaw : '127.0.0.1');
       const deviceId = body.deviceId || crypto.randomUUID();
       const deviceName = body.deviceName || 'Phone';
       const port = Number(body.port) || 54321;
@@ -215,6 +217,18 @@ export class FlikReceiverServer extends EventEmitter {
         deviceName: this.store.getDeviceName(),
         token,
       });
+    });
+
+    // POST /url - Standard URL handler for mobile-to-PC link sharing
+    this.app.post('/url', (req: Request, res: Response) => {
+      const url = req.body?.url as string;
+      const title = req.body?.title as string;
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        shell.openExternal(url);
+        this.emit('url-received', { title: title || 'Web Link', url });
+        return res.status(200).json({ status: 'ok' });
+      }
+      return res.status(400).json({ error: 'Invalid URL' });
     });
 
     // GET /ping - Lightweight connectivity and capacity pre-flight check

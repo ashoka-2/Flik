@@ -117,8 +117,10 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
       );
 
       if (commonAlbums.isNotEmpty) {
-        // Categorize into the 5 primary albums and "More albums"
-        AssetPathEntity? foundAll;
+        // True system device-wide "All" album has isAll == true
+        final allAlbum = commonAlbums.firstWhere((a) => a.isAll, orElse: () => commonAlbums.first);
+        _albumAll = allAlbum;
+
         AssetPathEntity? foundCamera;
         AssetPathEntity? foundFavorites;
         AssetPathEntity? foundVideos;
@@ -128,10 +130,16 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
         final others = <AssetPathEntity>[];
 
         for (final album in commonAlbums) {
+          // Never duplicate the All album or add it to other categories
+          if (album.id == allAlbum.id || album.isAll) continue;
+
           final name = album.name.trim().toLowerCase();
-          if (album.isAll || name == 'all' || name == 'recent' || name == 'recents' || name == 'all photos' || name == 'recent photos') {
-            foundAll ??= album;
-          } else if (name == 'camera' || name == 'dcim' || name.contains('camera')) {
+          // Never treat secondary folders named 'all', 'recent', 'recents' as duplicate albums
+          if (['all', 'recent', 'recents', 'all photos', 'recent photos'].contains(name)) {
+            continue;
+          }
+
+          if (name == 'camera' || name == 'dcim' || name.contains('camera')) {
             final count = await album.assetCountAsync;
             if (count > maxCameraCount) {
               foundCamera = album;
@@ -153,14 +161,13 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
           }
         }
 
-        others.removeWhere((a) => a.isAll || ['all', 'recent', 'recents', 'all photos', 'recent photos'].contains(a.name.trim().toLowerCase()));
+        others.removeWhere((a) => a.id == allAlbum.id || a.isAll || ['all', 'recent', 'recents', 'all photos', 'recent photos'].contains(a.name.trim().toLowerCase()));
 
         // Guarantee dedicated full-device Videos album if available
         if (videoAlbums.isNotEmpty) {
           foundVideos = videoAlbums.first;
         }
 
-        _albumAll = foundAll ?? commonAlbums.first;
         _albumCamera = foundCamera;
         _albumFavorites = foundFavorites;
         _albumVideos = foundVideos;
@@ -707,7 +714,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
   }
 
   String _formatAlbumName(AssetPathEntity album) {
-    if (album.isAll) return 'All';
+    if (album.id == _albumAll?.id || album.isAll) return 'All';
     final name = album.name;
     final lower = name.toLowerCase();
     if (lower == 'camera' || lower == 'dcim') return 'Camera';

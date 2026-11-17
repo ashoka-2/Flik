@@ -22,7 +22,7 @@ class QrScannerScreen extends StatefulWidget {
   State<QrScannerScreen> createState() => _QrScannerScreenState();
 }
 
-class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingObserver {
+class _QrScannerScreenState extends State<QrScannerScreen> {
   MobileScannerController? _controller;
   bool _hasScanned = false;
   bool _hasPermission = false;
@@ -31,25 +31,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingOb
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _checkPermissionAndInit();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_controller == null || !_hasPermission) return;
-    if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
-      _controller?.stop();
-    } else if (state == AppLifecycleState.resumed) {
-      _controller?.start();
-    }
   }
 
   Future<void> _checkPermissionAndInit() async {
@@ -68,24 +56,15 @@ class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingOb
 
   void _initScanner() {
     try {
-      _controller?.dispose();
       _controller = MobileScannerController(
         formats: const [BarcodeFormat.qrCode],
         detectionSpeed: DetectionSpeed.noDuplicates,
-        autoStart: false,
       );
 
       if (mounted) {
         setState(() {
           _hasPermission = true;
           _isChecking = false;
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          try {
-            _controller?.start();
-          } catch (e) {
-            debugPrint('Controller start error: $e');
-          }
         });
       }
     } catch (e) {
@@ -101,28 +80,10 @@ class _QrScannerScreenState extends State<QrScannerScreen> with WidgetsBindingOb
   Future<void> _retryCamera() async {
     setState(() => _isChecking = true);
     try {
-      await _controller?.stop();
+      await _controller?.dispose();
     } catch (_) {}
-    await Future.delayed(const Duration(milliseconds: 350));
-    try {
-      await _controller?.start();
-      if (mounted) setState(() => _isChecking = false);
-    } catch (_) {
-      try {
-        _controller?.dispose();
-        _controller = MobileScannerController(
-          formats: const [BarcodeFormat.qrCode],
-          detectionSpeed: DetectionSpeed.noDuplicates,
-          autoStart: false,
-        );
-        if (mounted) setState(() => _isChecking = false);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _controller?.start().catchError((_) {});
-        });
-      } catch (_) {
-        if (mounted) setState(() => _isChecking = false);
-      }
-    }
+    await Future.delayed(const Duration(milliseconds: 300));
+    _initScanner();
   }
 
   void _onDetect(BarcodeCapture capture) async {

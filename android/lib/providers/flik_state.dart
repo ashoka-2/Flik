@@ -84,6 +84,7 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
     });
 
     connectionPool.startDiscovery();
+    _ensureServerStarted();
 
     // Start sensors
     sensorService = SensorService(
@@ -93,6 +94,30 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
       },
     );
     sensorService?.start();
+  }
+
+  Future<void> _ensureServerStarted() async {
+    if (server != null && server!.isRunning) return;
+    server = FlikHttpServer(
+      storage: storage,
+      onPairingPrompt: (code, devName, cb) {
+        state = state.copyWith(
+          pendingPairing: {
+            'code': code,
+            'deviceName': devName,
+            'callback': cb,
+          },
+        );
+      },
+      onToast: (msg) => showToast(msg),
+      onUrlReceived: (title, url) => showToast('Opened $title'),
+      onTransferCompleted: (meta) => showToast('Received transfer'),
+      onPeerConnected: (peer) {
+        connectionPool.addOrUpdatePeer(peer);
+        state = state.copyWith(lockedPeerId: peer.deviceId);
+      },
+    );
+    await server?.start();
   }
 
   // Distributes peers along semicircle radar arc: -60, -30, 0, +30, +60 degrees

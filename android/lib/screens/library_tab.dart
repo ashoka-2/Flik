@@ -77,11 +77,16 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(FlikTokens.screenMargin),
-      itemCount: _history.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: () async => _loadHistory(),
+      color: FlikTokens.accentSoft,
+      backgroundColor: FlikTokens.surface,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(FlikTokens.screenMargin),
+        itemCount: _history.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
         final entry = _history[index];
         final sizeMb = (entry.totalBytes / (1024 * 1024)).toStringAsFixed(1);
         final dateStr = '${entry.timestamp.hour}:${entry.timestamp.minute.toString().padLeft(2, '0')}';
@@ -145,6 +150,7 @@ class _LibraryTabState extends ConsumerState<LibraryTab> {
           ),
         );
       },
+    ),
     );
   }
 

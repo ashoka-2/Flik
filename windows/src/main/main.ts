@@ -666,16 +666,27 @@ class FlikConnectorApp {
     ipcMain.handle('flik:get-peers', () => {
       const mdnsPeers = this.mdns.getDiscoveredPeers();
       const connectedClients = this.server.getConnectedClients();
+      const localIps = this.getAllLocalIps();
       const myId = this.store.getDeviceId();
+      const myName = (this.store.getDeviceName() || '').trim().toLowerCase();
+
+      const isSelf = (p: { deviceId?: string; deviceName?: string; ip?: string }) => {
+        if (!p) return true;
+        if (p.deviceId && p.deviceId === myId) return true;
+        if (p.deviceName && p.deviceName.trim().toLowerCase() === myName) return true;
+        const cleanIp = (p.ip || '').replace(/^.*:/, '').toLowerCase();
+        if (cleanIp && (localIps.has(cleanIp) || cleanIp === '127.0.0.1' || cleanIp === 'localhost')) return true;
+        return false;
+      };
 
       const combined = new Map<string, any>();
       for (const p of mdnsPeers) {
-        if (p.deviceId !== myId) {
+        if (!isSelf(p)) {
           combined.set(p.deviceId, p);
         }
       }
       for (const c of connectedClients) {
-        if (c.deviceId !== myId) {
+        if (!isSelf(c)) {
           combined.set(c.deviceId, {
             deviceId: c.deviceId,
             deviceName: c.deviceName,
@@ -787,24 +798,45 @@ class FlikConnectorApp {
     });
   }
 
+  private getAllLocalIps(): Set<string> {
+    const set = new Set<string>(['127.0.0.1', 'localhost', '::1']);
+    try {
+      const ifaces = os.networkInterfaces();
+      for (const name of Object.keys(ifaces)) {
+        for (const net of ifaces[name] || []) {
+          if (net.address) set.add(net.address.toLowerCase());
+        }
+      }
+    } catch {}
+    if (this.localIp) set.add(this.localIp.toLowerCase());
+    return set;
+  }
+
   // Returns all available phone targets, combining mDNS peers and connected clients
   private async getAvailablePhonePeers(): Promise<any[]> {
     const mdnsPeers = this.mdns.getDiscoveredPeers();
     const connectedClients = this.server.getConnectedClients();
+    const localIps = this.getAllLocalIps();
     const myId = this.store.getDeviceId();
-    const myName = (this.store.getDeviceName() || '').toLowerCase();
-    const myIp = this.localIp;
+    const myName = (this.store.getDeviceName() || '').trim().toLowerCase();
+
+    const isSelf = (p: { deviceId?: string; deviceName?: string; ip?: string }) => {
+      if (!p) return true;
+      if (p.deviceId && p.deviceId === myId) return true;
+      if (p.deviceName && p.deviceName.trim().toLowerCase() === myName) return true;
+      const cleanIp = (p.ip || '').replace(/^.*:/, '').toLowerCase();
+      if (cleanIp && (localIps.has(cleanIp) || cleanIp === '127.0.0.1' || cleanIp === 'localhost')) return true;
+      return false;
+    };
 
     const combined = new Map<string, any>();
     for (const p of mdnsPeers) {
-      const pName = (p.deviceName || '').toLowerCase();
-      if (p.deviceId !== myId && pName !== myName && p.ip !== myIp && p.ip !== '127.0.0.1') {
+      if (!isSelf(p)) {
         combined.set(p.deviceId, p);
       }
     }
     for (const c of connectedClients) {
-      const cName = (c.deviceName || '').toLowerCase();
-      if (c.deviceId !== myId && cName !== myName && c.ip !== myIp && c.ip !== '127.0.0.1') {
+      if (!isSelf(c)) {
         combined.set(c.deviceId, {
           deviceId: c.deviceId,
           deviceName: c.deviceName,

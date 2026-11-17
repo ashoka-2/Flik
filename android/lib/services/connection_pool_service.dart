@@ -23,6 +23,11 @@ class ConnectionPoolService {
   Stream<List<DiscoveredPeer>> get peersStream => _peersController.stream;
   List<DiscoveredPeer> get currentPeers => _peers.values.toList();
 
+  void addOrUpdatePeer(DiscoveredPeer peer) {
+    _peers[peer.deviceId] = peer;
+    _peersController.add(_peers.values.toList());
+  }
+
   ConnectionPoolService({required this.storage});
 
   // Derives 4-digit numeric confirmation code from pairing nonce
@@ -147,18 +152,25 @@ class ConnectionPoolService {
     }
   }
 
-  // GET /ping pre-flight check with 800ms timeout
+  // GET /ping pre-flight check with 4s timeout
   Future<Map<String, dynamic>?> preflightPing(String ip, int port) async {
     try {
       final res = await _dio.get(
         'http://$ip:$port/ping',
         options: Options(
-          receiveTimeout: const Duration(milliseconds: 800),
-          sendTimeout: const Duration(milliseconds: 800),
+          receiveTimeout: const Duration(seconds: 4),
+          sendTimeout: const Duration(seconds: 4),
         ),
       );
-      if (res.statusCode == 200 && res.data is Map) {
-        return Map<String, dynamic>.from(res.data as Map);
+      if (res.statusCode == 200) {
+        if (res.data is Map) {
+          return Map<String, dynamic>.from(res.data as Map);
+        } else if (res.data is String) {
+          try {
+            final decoded = jsonDecode(res.data as String);
+            if (decoded is Map) return Map<String, dynamic>.from(decoded);
+          } catch (_) {}
+        }
       }
     } catch (_) {}
     return null;
@@ -205,20 +217,34 @@ class ConnectionPoolService {
     if (ping != null) {
       final peer = DiscoveredPeer(
         deviceId: ping['deviceId'] as String,
-        deviceName: ping['deviceName'] as String? ?? 'Manual Device',
+        deviceName: ping['deviceName'] as String? ?? 'Device',
         platform: ping['platform'] as String? ?? 'windows',
         ip: ip,
         port: port,
         token: storage.getToken(ping['deviceId'] as String),
       );
 
-      // Perform instant mutual client handshake so PC knows about this phone and registers token
+      // Perform instant mutual client handshake so peer knows about this phone and registers token
       try {
         final clientToken = storage.getToken(peer.deviceId) ?? const Uuid().v4().replaceAll('-', '');
         await storage.saveToken(peer.deviceId, clientToken);
         peer.token = clientToken;
 
-        await _dio.post(
+        String? localIp;
+        try {
+          final ifaces = await NetworkInterface.list(includeLoopback: false, type: InternetAddressType.IPv4);
+          for (final iface in ifaces) {
+            for (final addr in iface.addresses) {
+              if (!addr.isLoopback && !addr.address.startsWith('169.254.')) {
+                localIp = addr.address;
+                break;
+              }
+            }
+            if (localIp != null) break;
+          }
+        } catch (_) {}
+
+        final res = await _dio.post(
           'http://$ip:$port/connect-client',
           data: {
             'deviceId': storage.getDeviceId(),
@@ -226,9 +252,21 @@ class ConnectionPoolService {
             'platform': 'android',
             'port': 54321,
             'token': clientToken,
+            if (localIp != null) 'ip': localIp,
           },
-          options: Options(sendTimeout: const Duration(seconds: 4), receiveTimeout: const Duration(seconds: 4)),
+          options: Options(sendTimeout: const Duration(seconds: 5), receiveTimeout: const Duration(seconds: 5)),
         );
+        if (res.statusCode == 200) {
+          dynamic resData = res.data;
+          if (resData is String) {
+            try {
+              resData = jsonDecode(resData);
+            } catch (_) {}
+          }
+          if (resData is Map && resData['deviceName'] != null) {
+            peer.deviceName = resData['deviceName'] as String;
+          }
+        }
       } catch (_) {}
 
       _peers[peer.deviceId] = peer;
