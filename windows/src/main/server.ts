@@ -175,6 +175,7 @@ export class FlikReceiverServer extends EventEmitter {
               return res.send(Buffer.from(outputBuffer));
             } catch (convErr) {
               console.error('HEIC convert error in /media:', convErr);
+              return res.status(415).send('HEIC conversion failed');
             }
           }
           return res.sendFile(targetPath);

@@ -40,7 +40,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
           if (dataUrl) {
             setImgSrc(dataUrl);
             setImgError(false);
-          } else if (ext === 'heic' || ext === 'heif') {
+          } else {
             setImgError(true);
           }
         }
@@ -455,29 +455,19 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
         )}
 
         {/* 3. Photo / Image View - Resilient with HEIC conversion and Fallback */}
-        {isImage && !imgError && (
+        {isImage && !imgError && mediaUrl && (
           <img
             src={mediaUrl}
-            alt={firstItem?.name || 'Photo'}
+            alt=""
             className="media-content"
-            onError={async () => {
-              if (firstItem?.localPath && window.flik?.readMediaDataUrl) {
-                try {
-                  const url = await window.flik.readMediaDataUrl(firstItem.localPath);
-                  if (url) {
-                    setImgSrc(url);
-                    setImgError(false);
-                    return;
-                  }
-                } catch {}
-              }
+            onError={() => {
               setImgError(true);
             }}
           />
         )}
 
         {/* 3b. Fallback Card if Image Failed or is HEIC not decoded in browser */}
-        {isImage && imgError && (
+        {isImage && (imgError || !mediaUrl) && (
           <div
             style={{
               width: 280,
@@ -524,7 +514,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                 </div>
                 <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
                   {firstItem?.size ? `${(firstItem.size / (1024 * 1024)).toFixed(1)} MB • ` : ''}
-                  {ext.toUpperCase()} Image
+                  {ext.toUpperCase()} Photo
                 </div>
               </div>
             </div>
@@ -551,7 +541,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
                 if (firstItem?.localPath) window.flik?.openFile(firstItem.localPath);
               }}
             >
-              <span>👁️</span> Click to view in Photos
+              <span>👁️</span> Click to view photo
             </button>
           </div>
         )}

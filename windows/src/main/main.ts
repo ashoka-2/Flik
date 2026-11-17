@@ -17,6 +17,7 @@ import {
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { exec } from 'child_process';
 import { pathToFileURL } from 'url';
 import { FlikSettingsStore } from './store';
 import { FlikReceiverServer } from './server';
@@ -183,9 +184,22 @@ class FlikConnectorApp {
     // Show the Flik Connector Dashboard window on launch so the user sees the app
     this.showTrayWindow();
 
-    // Bring up the dashboard when the user launches a second instance (e.g. clicks shortcut again)
-    app.on('second-instance', () => {
+    // Register Windows Explorer Right-Click Context Menu ("Send via Flik") and SendTo shortcut
+    this.setupWindowsExplorerIntegration();
+
+    // Process any files passed via command line arguments on cold launch
+    if (process.argv.length > 1) {
+      setTimeout(() => {
+        this.handleOutboundCliFiles(process.argv.slice(1));
+      }, 1500);
+    }
+
+    // Handle second instance (e.g. user right-clicks a file -> Send via Flik or Send to -> Flik Connector)
+    app.on('second-instance', (_event, commandLine) => {
       this.showTrayWindow();
+      if (commandLine && commandLine.length > 1) {
+        this.handleOutboundCliFiles(commandLine.slice(1));
+      }
     });
 
     // Listen to screen topology changes (connecting or disconnecting monitors)
@@ -197,6 +211,76 @@ class FlikConnectorApp {
       // Keep running in tray and background on Windows
     });
     app.on('before-quit', () => this.cleanup());
+  }
+
+  // Integrates Flik Connector into Windows Explorer right-click context menu and SendTo
+  private setupWindowsExplorerIntegration(): void {
+    if (process.platform !== 'win32') return;
+
+    try {
+      const exePath = process.execPath;
+      if (exePath.toLowerCase().includes('electron.exe') && !app.isPackaged) {
+        return; // Don't register dev electron.exe in system context menu
+      }
+
+      // 1. Register "Send via Flik" in HKCU\Software\Classes\*\shell\Flik
+      const menuTitle = 'Send via Flik';
+      const cmdKey = `HKCU\\Software\\Classes\\*\\shell\\Flik`;
+      const cmdVal = `\\"${exePath}\\" \\"%1\\"`;
+
+      exec(`reg add "${cmdKey}" /ve /d "${menuTitle}" /f && reg add "${cmdKey}" /v "Icon" /d "\\"${exePath}\\"" /f && reg add "${cmdKey}\\command" /ve /d "${cmdVal}" /f`, (err: any) => {
+        if (err) {
+          console.error('Failed registering Explorer context menu:', err);
+        } else {
+          console.log('Registered Explorer context menu: Send via Flik');
+        }
+      });
+
+      // 2. Add shortcut in Windows "Send to" folder (%APPDATA%\Microsoft\Windows\SendTo)
+      const sendToDir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'SendTo');
+      if (fs.existsSync(sendToDir)) {
+        const shortcutPath = path.join(sendToDir, 'Flik Connector.lnk');
+        const psScript = `$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('${shortcutPath.replace(/'/g, "''")}'); $Shortcut.TargetPath = '${exePath.replace(/'/g, "''")}'; $Shortcut.Save()`;
+        exec(`powershell -NoProfile -NonInteractive -Command "${psScript}"`, (err: any) => {
+          if (!err) console.log('Registered SendTo shortcut: Flik Connector');
+        });
+      }
+    } catch (e) {
+      console.error('setupWindowsExplorerIntegration error:', e);
+    }
+  }
+
+  // Handles streaming files passed via Windows Explorer context menu or SendTo
+  private async handleOutboundCliFiles(args: string[]): Promise<void> {
+    const validFiles: string[] = [];
+    for (const arg of args) {
+      if (!arg || arg.startsWith('--') || arg.startsWith('-')) continue;
+      const cleanPath = arg.replace(/^"|"$/g, '').trim();
+      try {
+        const resolved = path.resolve(cleanPath);
+        if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+          validFiles.push(resolved);
+        }
+      } catch (_) {}
+    }
+
+    if (validFiles.length === 0) return;
+
+    const peers = await this.getAvailablePhonePeers();
+    if (peers.length === 0) {
+      this.broadcastToOverlays('flik:toast', 'No phone connected to receive file. Please connect your phone first.');
+      this.showTrayWindow();
+      return;
+    }
+
+    const target = peers[0];
+    this.broadcastToOverlays('flik:toast', `Sending ${validFiles.length} file(s) to ${target.deviceName}...`);
+    const outcome = await sendFilesToPeer(target, validFiles, this.store);
+    if (outcome.success) {
+      this.broadcastToOverlays('flik:toast', `Delivered to ${target.deviceName}!`);
+    } else {
+      this.broadcastToOverlays('flik:toast', outcome.error || 'Failed sending file');
+    }
   }
 
   // Creates transparent full-screen overlay window on every connected display
@@ -597,6 +681,7 @@ class FlikConnectorApp {
               return `data:image/jpeg;base64,${Buffer.from(outputBuffer).toString('base64')}`;
             } catch (convErr) {
               console.error('HEIC conversion error:', convErr);
+              return null;
             }
           }
 

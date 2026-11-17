@@ -31,6 +31,7 @@ export const TrayWindow: React.FC = () => {
   const [urlToSend, setUrlToSend] = useState<string>('');
   const [showQr, setShowQr] = useState<boolean>(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const justDroppedRef = useRef<boolean>(false);
 
   const loadData = async () => {
     if (window.flik) {
@@ -374,7 +375,13 @@ export const TrayWindow: React.FC = () => {
         onDragLeave={() => setIsDragOver(false)}
         onDrop={(e) => {
           e.preventDefault();
+          e.stopPropagation();
           setIsDragOver(false);
+          justDroppedRef.current = true;
+          setTimeout(() => {
+            justDroppedRef.current = false;
+          }, 400);
+
           if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
             const paths: string[] = [];
             for (let i = 0; i < e.dataTransfer.files.length; i++) {
@@ -386,7 +393,10 @@ export const TrayWindow: React.FC = () => {
             }
           }
         }}
-        onClick={handleSendFileToPhone}
+        onClick={(e) => {
+          if (justDroppedRef.current) return;
+          handleSendFileToPhone();
+        }}
       >
         <div style={{ fontSize: 22, marginBottom: 2 }}>📥</div>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>

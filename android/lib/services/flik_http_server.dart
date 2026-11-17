@@ -264,21 +264,32 @@ class FlikHttpServer {
 
               // Save to Android Gallery if image or video
               final lower = safeName.toLowerCase();
-              try {
-                if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp') || lower.endsWith('.heic')) {
-                  await Gal.putImage(tempFile.path, album: 'Flik');
-                } else if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.mkv')) {
-                  await Gal.putVideo(tempFile.path, album: 'Flik');
-                }
-              } catch (_) {}
+              final isMedia = lower.endsWith('.jpg') ||
+                  lower.endsWith('.jpeg') ||
+                  lower.endsWith('.png') ||
+                  lower.endsWith('.webp') ||
+                  lower.endsWith('.heic') ||
+                  lower.endsWith('.mp4') ||
+                  lower.endsWith('.mov') ||
+                  lower.endsWith('.mkv');
 
-              // Save to Downloads/Flik
-              try {
-                await MediaStoreService.saveToDownloads(
-                  fileName: safeName,
-                  bytes: Uint8List.fromList(bytes),
-                );
-              } catch (_) {}
+              if (isMedia) {
+                try {
+                  if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.mkv')) {
+                    await Gal.putVideo(tempFile.path, album: 'Flik');
+                  } else {
+                    await Gal.putImage(tempFile.path, album: 'Flik');
+                  }
+                } catch (_) {}
+              } else {
+                // Non-media document/file: Save to Downloads/Flik (prevents duplicate media in gallery)
+                try {
+                  await MediaStoreService.saveToDownloads(
+                    fileName: safeName,
+                    bytes: Uint8List.fromList(bytes),
+                  );
+                } catch (_) {}
+              }
             }
           }
         }
@@ -292,27 +303,37 @@ class FlikHttpServer {
         final isImg = senderName.toLowerCase().endsWith('.jpg') || senderName.toLowerCase().endsWith('.png') || senderName.toLowerCase().endsWith('.webp') || senderName.toLowerCase().endsWith('.heic');
         final isVid = senderName.toLowerCase().endsWith('.mp4') || senderName.toLowerCase().endsWith('.mov') || senderName.toLowerCase().endsWith('.mkv');
 
-        await storage.addHistoryEntry(
-          TransferHistoryEntry(
-            id: meta?.transferId ?? const Uuid().v4(),
-            deviceName: 'Flik Peer',
-            isOutbound: false,
-            itemsCount: savedFiles.length,
-            totalBytes: totalBytes,
-            timestamp: DateTime.now(),
-            summaryName: senderName,
-            status: 'completed',
-            localPath: firstSavedPath,
-            kind: isImg ? 'image' : (isVid ? 'video' : 'file'),
-          ),
+        try {
+          await storage.addHistoryEntry(
+            TransferHistoryEntry(
+              id: meta?.transferId ?? const Uuid().v4(),
+              deviceName: 'Flik Peer',
+              isOutbound: false,
+              itemsCount: savedFiles.length,
+              totalBytes: totalBytes,
+              timestamp: DateTime.now(),
+              summaryName: senderName,
+              status: 'completed',
+              localPath: firstSavedPath,
+              kind: isImg ? 'image' : (isVid ? 'video' : 'file'),
+            ),
+          );
+        } catch (_) {}
+
+        try {
+          onToast('Received ${savedFiles.length} item(s)');
+        } catch (_) {}
+
+        try {
+          if (meta != null) {
+            onTransferCompleted(meta);
+          }
+        } catch (_) {}
+
+        return Response.ok(
+          jsonEncode({'status': 'completed'}),
+          headers: {'content-type': 'application/json'},
         );
-
-        onToast('Received ${savedFiles.length} file(s) into Gallery/Downloads');
-        if (meta != null) {
-          onTransferCompleted(meta);
-        }
-
-        return Response.ok(jsonEncode({'status': 'completed'}));
       } catch (e) {
         watchdog?.cancel();
         _cleanupPartials();

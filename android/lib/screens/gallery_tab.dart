@@ -62,9 +62,12 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     _loadAlbums();
 
     // Listen to physical wrist flick gesture when multiple photos are selected
+    int lastGalleryFlickTime = 0;
     _sensorService = SensorService(
       onFlick: (trajX) {
-        if (_selectedAssetIds.isNotEmpty && mounted) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (_selectedAssetIds.isNotEmpty && (now - lastGalleryFlickTime > 1200) && mounted) {
+          lastGalleryFlickTime = now;
           _sendSelectedDirectly(trajectoryX: trajX);
         }
       },

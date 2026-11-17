@@ -65,14 +65,22 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
       end: -0.06,
     ).animate(CurvedAnimation(parent: _flyController, curve: Curves.easeIn));
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(flikAppProvider.notifier).clearStaging();
+    });
+
     _initSensors();
     _loadCurrentMedia();
   }
 
+  int _lastMediaFlickTime = 0;
+
   void _initSensors() {
     _sensorService = SensorService(
       onFlick: (trajX) {
-        if (!_isSending && mounted) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (!_isSending && (now - _lastMediaFlickTime > 1200) && mounted) {
+          _lastMediaFlickTime = now;
           _lastFlickTrajX = trajX;
           _triggerFlickSend();
         }

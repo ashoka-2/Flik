@@ -88,7 +88,11 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
 
     // Start sensors
     sensorService = SensorService(
-      onFlick: (trajX) => triggerSend(trajectoryX: trajX),
+      onFlick: (trajX) {
+        if (state.stagedItems.isNotEmpty && !state.isSending) {
+          triggerSend(trajectoryX: trajX);
+        }
+      },
       onHeadingChanged: (heading) {
         state = state.copyWith(compassHeading: heading);
       },
@@ -267,9 +271,14 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
     return overallSuccess;
   }
 
+  int _lastSendTimestamp = 0;
+
   // Sends items directly without requiring prior staging
   Future<bool> sendItemsDirectly(List<TransferItem> items, {double? trajectoryX}) async {
-    if (items.isEmpty || state.isSending) return false;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (items.isEmpty || state.isSending || (now - _lastSendTimestamp < 1200)) return false;
+    _lastSendTimestamp = now;
+
     if (state.peers.isEmpty) {
       showToast('No PC found nearby. Make sure devices are on the same Wi-Fi.');
       return false;
@@ -281,7 +290,8 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
 
     if (targetPeers.isEmpty) return false;
 
-    state = state.copyWith(isSending: true, sendProgress: 0.0);
+    // Reset any stale staged items to guarantee only current item is sent
+    state = state.copyWith(stagedItems: [], isSending: true, sendProgress: 0.0);
     bool overallSuccess = false;
 
     for (final peer in targetPeers) {
@@ -331,7 +341,10 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
   }
 
   Future<void> triggerSend({double? trajectoryX}) async {
-    if (state.stagedItems.isEmpty || state.isSending) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (state.stagedItems.isEmpty || state.isSending || (now - _lastSendTimestamp < 1200)) return;
+    _lastSendTimestamp = now;
+
     if (state.peers.isEmpty) {
       showToast('No peers found nearby. Make sure devices are on Wi-Fi.');
       return;
