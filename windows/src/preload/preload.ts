@@ -49,6 +49,11 @@ const flikApi = {
     return await ipcRenderer.invoke('flik:save-files-to-folder', filePaths);
   },
 
+  // Toggles full-screen overlay mode (disables mouse passthrough and manages focus)
+  setFullscreenMode: (active: boolean) => {
+    ipcRenderer.send('flik:set-fullscreen-mode', active);
+  },
+
   // Deletes transferred temp files
   deleteFiles: (filePaths: string[]) => {
     ipcRenderer.send('flik:delete-files', filePaths);
@@ -151,6 +156,12 @@ const flikApi = {
     const sub = (_: any, clients: any[]) => callback(clients);
     ipcRenderer.on('flik:clients-updated', sub);
     return () => ipcRenderer.removeListener('flik:clients-updated', sub);
+  },
+
+  onForceExitFullscreen: (callback: () => void) => {
+    const sub = () => callback();
+    ipcRenderer.on('flik:force-exit-fullscreen', sub);
+    return () => ipcRenderer.removeListener('flik:force-exit-fullscreen', sub);
   },
 };
 

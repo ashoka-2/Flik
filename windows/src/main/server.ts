@@ -224,9 +224,10 @@ export class FlikReceiverServer extends EventEmitter {
     this.app.post('/url', (req: Request, res: Response) => {
       const url = req.body?.url as string;
       const title = req.body?.title as string;
+      const senderDevice = (req.body?.senderDevice as string) || (req.body?.sender as string) || 'Phone';
       if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
         shell.openExternal(url);
-        this.emit('url-received', { title: title || 'Web Link', url });
+        this.emit('url-received', { senderDevice, title: title || 'Web Link', url });
         return res.status(200).json({ status: 'ok' });
       }
       return res.status(400).json({ error: 'Invalid URL' });

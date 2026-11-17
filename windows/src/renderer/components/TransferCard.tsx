@@ -58,6 +58,8 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
         }
         if (isExpandedVideo) {
           setIsExpandedVideo(false);
+          window.flik?.setFullscreenMode?.(false);
+          return;
         }
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => {});
@@ -71,6 +73,22 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
       window.removeEventListener('keydown', handleEscKey);
     };
   }, [firstItem?.localPath, isImage, isExpandedVideo, ext, contextMenuPos]);
+
+  // Handle IPC forced exit fullscreen (e.g. from global Escape hook)
+  useEffect(() => {
+    const unsub = window.flik?.onForceExitFullscreen?.(() => {
+      if (isExpandedVideo) {
+        setIsExpandedVideo(false);
+        window.flik?.setFullscreenMode?.(false);
+      }
+    });
+    return () => {
+      unsub?.();
+      if (isExpandedVideo) {
+        window.flik?.setFullscreenMode?.(false);
+      }
+    };
+  }, [isExpandedVideo]);
 
   // Click outside to dismiss context menu
   useEffect(() => {
@@ -174,7 +192,17 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
   // Video expand / theater toggle
   const toggleVideoExpand = (e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setIsExpandedVideo((prev) => !prev);
+    setIsExpandedVideo((prev) => {
+      const next = !prev;
+      window.flik?.setFullscreenMode?.(next);
+      return next;
+    });
+  };
+
+  const handleExitExpanded = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setIsExpandedVideo(false);
+    window.flik?.setFullscreenMode?.(false);
   };
 
   // Audio Playback Controls
@@ -212,78 +240,94 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
       {/* Expanded Theater Video View */}
       {isExpandedVideo && isVideo && (
         <div
+          data-interactive="true"
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 99999,
-            backgroundColor: 'rgba(0, 0, 0, 0.92)',
-            backdropFilter: 'blur(16px)',
+            backgroundColor: 'rgba(0, 0, 0, 0.94)',
+            backdropFilter: 'blur(24px)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 24,
+            padding: 32,
+            cursor: 'default',
           }}
-          onClick={() => setIsExpandedVideo(false)}
+          onClick={handleExitExpanded}
         >
+          {/* Top Control Bar */}
           <div
             style={{
               position: 'absolute',
-              top: 20,
-              right: 24,
+              top: 24,
+              right: 32,
               display: 'flex',
-              gap: 12,
+              alignItems: 'center',
+              gap: 14,
               zIndex: 100000,
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <button
-              onClick={toggleVideoExpand}
+              onClick={handleExitExpanded}
               style={{
-                background: 'rgba(255, 255, 255, 0.15)',
+                background: 'rgba(255, 255, 255, 0.16)',
                 color: '#fff',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.35)',
                 borderRadius: 999,
-                padding: '8px 18px',
-                fontSize: 13,
+                padding: '10px 22px',
+                fontSize: 14,
                 fontWeight: 600,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
+                gap: 8,
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.6)',
               }}
+              title="Minimize to Desktop (Esc)"
             >
-              ⤢ Minimize (Esc)
+              <span>⤢</span> Minimize (Esc)
             </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setIsExpandedVideo(false);
+                handleExitExpanded();
                 onDismiss(card.id);
               }}
               style={{
-                background: 'rgba(239, 68, 68, 0.8)',
+                background: 'rgba(239, 68, 68, 0.85)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '50%',
-                width: 36,
-                height: 36,
-                fontSize: 16,
+                width: 40,
+                height: 40,
+                fontSize: 18,
                 fontWeight: 700,
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 8px 24px rgba(239, 68, 68, 0.4)',
               }}
-              title="Close"
+              title="Close and Dismiss Video"
             >
               ✕
             </button>
           </div>
 
+          {/* Video Container */}
           <div
             style={{
-              maxWidth: '92vw',
-              maxHeight: '84vh',
-              borderRadius: 16,
+              maxWidth: '90vw',
+              maxHeight: '82vh',
+              borderRadius: 20,
               overflow: 'hidden',
-              boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8)',
+              boxShadow: '0 32px 80px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.15)',
+              background: '#000000',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -291,11 +335,14 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
               src={mediaUrl}
               controls
               autoPlay
+              controlsList="nodownload nofullscreen"
+              onDoubleClick={handleExitExpanded}
               style={{
-                maxWidth: '92vw',
-                maxHeight: '84vh',
+                maxWidth: '90vw',
+                maxHeight: '82vh',
                 display: 'block',
-                borderRadius: 16,
+                borderRadius: 20,
+                outline: 'none',
               }}
             />
           </div>
@@ -329,6 +376,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({ card, onPositionChan
               controls
               autoPlay
               muted
+              controlsList="nodownload nofullscreen"
               className="media-content"
               onDoubleClick={toggleVideoExpand}
             />

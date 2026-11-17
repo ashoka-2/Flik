@@ -312,6 +312,13 @@ class FlikConnectorApp {
       win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
       win.setIgnoreMouseEvents(true, { forward: true });
 
+      // Global Escape listener to reliably escape video theater or full-screen overlays
+      win.webContents.on('before-input-event', (_event, input) => {
+        if (input.key === 'Escape' && input.type === 'keyDown') {
+          win.webContents.send('flik:force-exit-fullscreen');
+        }
+      });
+
       // Load Vite build or dev server
       if (process.env.VITE_DEV_SERVER_URL) {
         win.loadURL(`${process.env.VITE_DEV_SERVER_URL}?mode=overlay&displayId=${display.id}`);
@@ -587,6 +594,20 @@ class FlikConnectorApp {
 
       if (rects.length > 0) {
         this.startCursorPolling();
+      }
+    });
+
+    // Toggles full-screen overlay mode (disables mouse event passthrough and manages focus)
+    ipcMain.on('flik:set-fullscreen-mode', (event, active: boolean) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (!win || win.isDestroyed()) return;
+      if (active) {
+        win.setIgnoreMouseEvents(false);
+        win.focus();
+        win.setAlwaysOnTop(true, 'floating');
+      } else {
+        win.setIgnoreMouseEvents(true, { forward: true });
+        win.setAlwaysOnTop(true, 'screen-saver');
       }
     });
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_handler/share_handler.dart';
 import 'package:uuid/uuid.dart';
@@ -34,6 +35,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   bool _isRadarCollapsed = false;
   StreamSubscription? _mediaStreamSub;
 
+  static const _shareChannel = MethodChannel('flik/share_intake');
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +44,26 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 
   void _initShareHandler() async {
+    // 1. Dedicated Android Share Sheet intake (handles Instagram, YouTube, browsers, etc.)
+    _shareChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onShareReceived') {
+        final data = call.arguments;
+        if (data is Map) {
+          _processRawShareData(Map<String, dynamic>.from(data));
+        }
+      }
+    });
+
+    try {
+      final initialData = await _shareChannel.invokeMethod('getInitialShare');
+      if (initialData is Map) {
+        _processRawShareData(Map<String, dynamic>.from(initialData));
+      }
+    } catch (e) {
+      debugPrint('Initial native share error: $e');
+    }
+
+    // 2. ShareHandler fallback for standard plugin intake
     final handler = ShareHandlerPlatform.instance;
     try {
       final initialMedia = await handler.getInitialSharedMedia();
@@ -54,6 +77,76 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     _mediaStreamSub = handler.sharedMediaStream.listen((SharedMedia media) {
       _processSharedMedia(media);
     });
+  }
+
+  void _processRawShareData(Map<String, dynamic> data) async {
+    final notifier = ref.read(flikAppProvider.notifier);
+    final state = ref.read(flikAppProvider);
+
+    final text = data['text'] as String?;
+    final files = (data['files'] as List?)?.map((e) => e.toString()).toList() ?? [];
+
+    if (text != null && text.trim().isNotEmpty) {
+      final urlMatch = RegExp(r'https?://[^\s]+').firstMatch(text.trim());
+      final rawUrl = urlMatch != null ? urlMatch.group(0)! : text.trim();
+      final uri = Uri.tryParse(rawUrl);
+      final isUrl = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+
+      if (isUrl) {
+        if (state.peers.isNotEmpty) {
+          notifier.showToast('Sending link to ${state.peers.first.deviceName}...');
+          final success = await notifier.sendUrl(rawUrl, title: uri.host);
+          if (success) {
+            notifier.showToast('Opened link on ${state.peers.first.deviceName}!');
+          }
+        } else {
+          notifier.stageItems([
+            TransferItem(
+              id: const Uuid().v4(),
+              name: rawUrl,
+              size: rawUrl.length,
+              mime: 'text/uri-list',
+              kind: 'file',
+              url: rawUrl,
+            ),
+          ]);
+          setState(() => _currentTabIndex = 2); // Files & Links tab
+          notifier.showToast('No PC connected. Link staged in Files & Links!');
+        }
+      }
+    }
+
+    if (files.isNotEmpty) {
+      final items = <TransferItem>[];
+      for (final filePath in files) {
+        final file = File(filePath);
+        if (await file.exists()) {
+          final fileName = filePath.split(Platform.pathSeparator).last;
+          final ext = fileName.split('.').last.toLowerCase();
+          final isImg = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'heic'].contains(ext);
+          final isVid = ['mp4', 'mkv', 'mov', 'avi', 'webm', '3gp'].contains(ext);
+          final kind = isImg ? 'image' : (isVid ? 'video' : 'file');
+          final mime = isImg ? 'image/$ext' : (isVid ? 'video/$ext' : 'application/octet-stream');
+          final size = await file.length();
+
+          items.add(
+            TransferItem(
+              id: const Uuid().v4(),
+              name: fileName,
+              size: size,
+              mime: mime,
+              kind: kind,
+              localPath: filePath,
+            ),
+          );
+        }
+      }
+
+      if (items.isNotEmpty) {
+        notifier.stageItems(items);
+        notifier.showToast('Staged ${items.length} shared item(s). Aim and flick to send!');
+      }
+    }
   }
 
   void _processSharedMedia(SharedMedia media) async {
