@@ -3,7 +3,7 @@
 # ⚡ Flik
 ### The Iron Man Style Spatial File Sharing App for Android & Windows
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-3566EF?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ashoka-2/Flik/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/badge/Release-v1.0.1-3566EF?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ashoka-2/Flik/releases/tag/v1.0.1)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%2010%2F11-20201E?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/ashoka-2/Flik/releases)
 [![License](https://img.shields.io/badge/License-MIT-20201E?style=for-the-badge)](LICENSE)
 [![Zero Cloud](https://img.shields.io/badge/Zero%20Cloud-100%25%20Private%20P2P-3566EF?style=for-the-badge)](docs/PROTOCOL.md)
@@ -13,7 +13,7 @@
   Flik is an open-source, gesture-driven file sharing system. Send photos, videos, large files, and web links between Android and Windows over your local network — no relay server or account required. Local transfers work without internet; update checks need internet access.
 </p>
 
-[Download Release v1.0.0](https://github.com/ashoka-2/Flik/releases/tag/v1.0.0) • [All releases](https://github.com/ashoka-2/Flik/releases) • [How to Install](#-installation--getting-started) • [Protocol Spec](docs/PROTOCOL.md)
+[Download Release v1.0.1](https://github.com/ashoka-2/Flik/releases/tag/v1.0.1) • [All releases](https://github.com/ashoka-2/Flik/releases) • [How to Install](#-installation--getting-started) • [Protocol Spec](docs/PROTOCOL.md)
 
 </div>
 
@@ -129,15 +129,15 @@ flik/
 
 ## 🚀 Installation & Getting Started
 
-### 1. Download Binaries (GitHub Release v1.0.0)
+### 1. Download Binaries (GitHub Release v1.0.1)
 
-Grab the official binaries from the [GitHub Releases Page](https://github.com/ashoka-2/Flik/releases/tag/v1.0.0):
+Grab the official binaries from the [GitHub Releases Page](https://github.com/ashoka-2/Flik/releases/tag/v1.0.1):
 
 | Platform | Download Link | Type |
 | :--- | :--- | :--- |
-| **Android** | [Download `app-release.apk`](https://github.com/ashoka-2/Flik/releases/download/v1.0.0/app-release.apk) | Android 8.0+ APK |
-| **Windows** | [Download `Flik.Connector.Setup.1.0.0.exe`](https://github.com/ashoka-2/Flik/releases/download/v1.0.0/Flik.Connector.Setup.1.0.0.exe) | NSIS Installer with auto-updates |
-| **Windows** | [Download `Flik.Connector.1.0.0.exe`](https://github.com/ashoka-2/Flik/releases/download/v1.0.0/Flik.Connector.1.0.0.exe) | Standalone Portable; updates open the release installer |
+| **Android** | [Download `app-release.apk`](https://github.com/ashoka-2/Flik/releases/download/v1.0.1/app-release.apk) | Android 8.0+ APK |
+| **Windows** | [Download `Flik.Connector.Setup.1.0.0.exe`](https://github.com/ashoka-2/Flik/releases/download/v1.0.1/Flik.Connector.Setup.1.0.0.exe) | NSIS Installer with auto-updates |
+| **Windows** | [Download `Flik.Connector.1.0.0.exe`](https://github.com/ashoka-2/Flik/releases/download/v1.0.1/Flik.Connector.1.0.0.exe) | Standalone Portable; updates open the release installer |
 
 ---
 
