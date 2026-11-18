@@ -4,7 +4,9 @@
 ### The Iron Man Style Spatial File Sharing App for Android & Windows
 
 [![Release](https://img.shields.io/badge/Release-v1.0.1-3566EF?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ashoka-2/Flik/releases/tag/v1.0.1)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%2010%2F11-20201E?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/ashoka-2/Flik/releases)
+[![Android Downloads](https://img.shields.io/github/downloads/ashoka-2/Flik/app-release.apk.svg?style=for-the-badge&logo=android&logoColor=white&label=Android%20Downloads&color=3DDC84)](https://github.com/ashoka-2/Flik/releases)
+[![Windows Downloads](https://img.shields.io/github/downloads/ashoka-2/Flik/Flik.Connector.Setup.1.0.0.exe.svg?style=for-the-badge&logo=windows&logoColor=white&label=Windows%20Downloads&color=0078D4)](https://github.com/ashoka-2/Flik/releases)
+[![Total Downloads](https://img.shields.io/github/downloads/ashoka-2/Flik/total.svg?style=for-the-badge&logo=github&label=Total%20Downloads&color=3566EF)](https://github.com/ashoka-2/Flik/releases)
 [![License](https://img.shields.io/badge/License-MIT-20201E?style=for-the-badge)](LICENSE)
 [![Zero Cloud](https://img.shields.io/badge/Zero%20Cloud-100%25%20Private%20P2P-3566EF?style=for-the-badge)](docs/PROTOCOL.md)
 
@@ -13,7 +15,23 @@
   Flik is an open-source, gesture-driven file sharing system. Send photos, videos, large files, and web links between Android and Windows over your local network — no relay server or account required. Local transfers work without internet; update checks need internet access.
 </p>
 
-[Download Release v1.0.1](https://github.com/ashoka-2/Flik/releases/tag/v1.0.1) • [All releases](https://github.com/ashoka-2/Flik/releases) • [How to Install](#-installation--getting-started) • [Protocol Spec](docs/PROTOCOL.md)
+### 📥 Download Flik (v1.0.1)
+
+<p align="center">
+  <a href="https://github.com/ashoka-2/Flik/releases/download/v1.0.1/app-release.apk">
+    <img src="https://img.shields.io/badge/Download-Android%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Download Android APK" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/ashoka-2/Flik/releases/download/v1.0.1/Flik.Connector.Setup.1.0.0.exe">
+    <img src="https://img.shields.io/badge/Download-Windows%20Installer-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Installer" />
+  </a>
+  &nbsp;&nbsp;
+  <a href="https://github.com/ashoka-2/Flik/releases/download/v1.0.1/Flik.Connector.1.0.0.exe">
+    <img src="https://img.shields.io/badge/Download-Windows%20Portable-20201E?style=for-the-badge&logo=windows&logoColor=white" alt="Download Windows Portable" />
+  </a>
+</p>
+
+[View All Releases & Changelog](https://github.com/ashoka-2/Flik/releases) • [How to Install](#-installation--getting-started) • [Protocol Spec](docs/PROTOCOL.md)
 
 </div>
 
