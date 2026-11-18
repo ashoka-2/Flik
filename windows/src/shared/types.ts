@@ -15,6 +15,7 @@ export interface TransferMeta {
   transferId: string;
   items: TransferItemMeta[];
   trajectoryX?: number;
+  trajectoryY?: number;
 }
 
 export interface PairRequestPayload {
@@ -88,6 +89,7 @@ export interface ActiveTransferCard {
   x: number;
   y: number;
   trajectoryX?: number;
+  trajectoryY?: number;
   groupId?: string;
   createdAt: number;
 }

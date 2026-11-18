@@ -490,6 +490,7 @@ export class FlikReceiverServer extends EventEmitter {
 
           if (meta && savedItems.length > 0) {
             const traj = typeof meta.trajectoryX === 'number' ? meta.trajectoryX : 0;
+            const trajY = typeof meta.trajectoryY === 'number' ? meta.trajectoryY : 0;
             // Emit separate floating media cards for each transferred item so all photos appear on desktop
             for (let i = 0; i < savedItems.length; i++) {
               const item = savedItems[i];
@@ -501,6 +502,7 @@ export class FlikReceiverServer extends EventEmitter {
                 x: 100 + (i * 40),
                 y: 100 + (i * 25),
                 trajectoryX: traj + (i * 0.10) - ((savedItems.length - 1) * 0.05),
+                trajectoryY: trajY,
                 createdAt: Date.now() + i,
               };
               this.emit('transfer-received', card);

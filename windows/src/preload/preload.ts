@@ -121,6 +121,10 @@ const flikApi = {
     return await ipcRenderer.invoke('flik:get-start-with-windows');
   },
 
+  checkForUpdates: async (): Promise<boolean> => {
+    return await ipcRenderer.invoke('flik:check-for-updates');
+  },
+
   // Listeners for events from the Electron main process
   onPairingRequest: (callback: (request: any) => void) => {
     const sub = (_: any, data: any) => callback(data);

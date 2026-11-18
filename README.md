@@ -3,31 +3,17 @@
 # ⚡ Flik
 ### The Iron Man Style Spatial File Sharing App for Android & Windows
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-3566EF?style=for-the-badge&logo=github&logoColor=white)](https://github.com/<!-- YOUR_GITHUB_USERNAME -->/<!-- YOUR_REPO_NAME -->/releases/tag/v1.0.0)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%2010%2F11-20201E?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/<!-- YOUR_GITHUB_USERNAME -->/<!-- YOUR_REPO_NAME -->/releases)
+[![Release](https://img.shields.io/badge/Release-v1.0.0-3566EF?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ashoka-2/Flik/releases/tag/v1.0.0)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows%2010%2F11-20201E?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/ashoka-2/Flik/releases)
 [![License](https://img.shields.io/badge/License-MIT-20201E?style=for-the-badge)](LICENSE)
 [![Zero Cloud](https://img.shields.io/badge/Zero%20Cloud-100%25%20Private%20P2P-3566EF?style=for-the-badge)](docs/PROTOCOL.md)
 
 <p align="center">
   <b>Aim. Flick. Delivered.</b><br>
-  Flik is an open-source, gesture-driven spatial file sharing system. Aim your phone at your Windows PC and flick upward to beam photos, videos, large files, and web links through the air onto your desktop at line speed — zero cloud uploads, zero account logins, and zero internet data usage.
+  Flik is an open-source, gesture-driven file sharing system. Send photos, videos, large files, and web links between Android and Windows over your local network — no relay server or account required. Local transfers work without internet; update checks need internet access.
 </p>
 
-<!-- ================================================================= -->
-<!-- DEMO VIDEO SECTION                                                -->
-<!-- Replace YOUR_VIDEO_URL_HERE with your video link (YouTube, Loom,  -->
-<!-- or raw GitHub asset mp4) and YOUR_VIDEO_THUMBNAIL_HERE with image -->
-<!-- ================================================================= -->
-
-<a href="<!-- YOUR_VIDEO_URL_HERE (e.g. https://www.youtube.com/watch?v=YOUR_VIDEO_ID) -->">
-  <img src="<!-- YOUR_VIDEO_THUMBNAIL_HERE (e.g. docs/assets/demo_preview.png or https://img.youtube.com/vi/YOUR_VIDEO_ID/maxresdefault.jpg) -->" alt="Flik - Iron Man Style File Sharing in Action" width="860" style="border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);" />
-</a>
-
-<p align="center">
-  <sub>🎬 <i>Click the banner above to watch Flik spatial transfer in action.</i></sub>
-</p>
-
-[Download Release v1.0.0](<!-- YOUR_GITHUB_RELEASE_URL (e.g. https://github.com/YOUR_USERNAME/YOUR_REPO/releases/tag/v1.0.0) -->) • [Watch Video Demo](<!-- YOUR_VIDEO_URL_HERE -->) • [How to Install](#-installation--getting-started) • [Protocol Spec](docs/PROTOCOL.md)
+[Download Release v1.0.0](https://github.com/ashoka-2/Flik/releases/tag/v1.0.0) • [All releases](https://github.com/ashoka-2/Flik/releases) • [How to Install](#-installation--getting-started) • [Protocol Spec](docs/PROTOCOL.md)
 
 </div>
 
@@ -145,18 +131,18 @@ flik/
 
 ### 1. Download Binaries (GitHub Release v1.0.0)
 
-Grab the official binaries from the [GitHub Releases Page](<!-- YOUR_GITHUB_RELEASE_URL (e.g. https://github.com/YOUR_USERNAME/YOUR_REPO/releases/tag/v1.0.0) -->):
+Grab the official binaries from the [GitHub Releases Page](https://github.com/ashoka-2/Flik/releases/tag/v1.0.0):
 
 | Platform | Download Link | Type |
 | :--- | :--- | :--- |
-| **Android** | [Download `app-release.apk`](<!-- YOUR_APK_DOWNLOAD_LINK (e.g. https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/v1.0.0/app-release.apk) -->) | Android 8.0+ APK |
-| **Windows** | [Download `Flik Connector Setup 1.0.0.exe`](<!-- YOUR_EXE_INSTALLER_LINK (e.g. https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/v1.0.0/Flik.Connector.Setup.1.0.0.exe) -->) | NSIS Installer |
-| **Windows** | [Download `Flik Connector 1.0.0.exe`](<!-- YOUR_PORTABLE_EXE_LINK (e.g. https://github.com/YOUR_USERNAME/YOUR_REPO/releases/download/v1.0.0/Flik.Connector.1.0.0.exe) -->) | Standalone Portable |
+| **Android** | [Download `app-release.apk`](https://github.com/ashoka-2/Flik/releases/download/v1.0.0/app-release.apk) | Android 8.0+ APK |
+| **Windows** | [Download `Flik.Connector.Setup.1.0.0.exe`](https://github.com/ashoka-2/Flik/releases/download/v1.0.0/Flik.Connector.Setup.1.0.0.exe) | NSIS Installer with auto-updates |
+| **Windows** | [Download `Flik.Connector.1.0.0.exe`](https://github.com/ashoka-2/Flik/releases/download/v1.0.0/Flik.Connector.1.0.0.exe) | Standalone Portable; updates open the release installer |
 
 ---
 
 ### 2. Windows Desktop Setup
-1. Download either the **Installer** or the **Portable `.exe`**.
+1. Download either the **Installer** or the **Portable `.exe`**. The installer edition supports in-app updates; portable builds open the release installer when an update is found.
 2. **First Run (SmartScreen)**: Because Flik is an open-source project without a commercial corporate certificate, Windows SmartScreen will display:
    > *"Windows protected your PC"*  
    > Click **More info** → Click **Run anyway**.
@@ -187,6 +173,14 @@ Grab the official binaries from the [GitHub Releases Page](<!-- YOUR_GITHUB_RELE
 3. Point your camera at the **QR Code** shown on your Windows Flik Connector dashboard.
 4. Once paired, tap any photo or video in the Gallery, **flick your phone forward/up**, and watch your file float directly onto your computer desktop.
 
+### App Updates
+
+- **Android** checks GitHub Releases on launch and periodically while open. **Update now** opens the APK download; Android asks you to confirm installation. Keep signing with the same Android release key for upgrades to install over the current app.
+- **Windows installer** checks for updates on launch and periodically. Choose **Update now** to download, then **Install now** to restart into the new version.
+- **Windows portable** can check for updates but opens the release installer for manual installation.
+
+To publish a new version, bump `android/pubspec.yaml` and `windows/package.json` to the new version. Build the Android APK with the same signing key as the installed version and attach it as `app-release.apk` to the GitHub release. For Windows, set a GitHub token in `GH_TOKEN`, then run `npm run release:dist` from `windows/`; publish the generated release so its `latest.yml`, installer, and blockmap files are available. Mark updater releases as stable releases rather than prereleases.
+
 ---
 
 ## 🛠️ Building from Source
@@ -198,7 +192,7 @@ Grab the official binaries from the [GitHub Releases Page](<!-- YOUR_GITHUB_RELE
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/<!-- YOUR_GITHUB_USERNAME -->/<!-- YOUR_REPO_NAME -->.git
+git clone https://github.com/ashoka-2/Flik.git
 cd flik
 
 # 2. Build Windows Connector
@@ -218,15 +212,16 @@ flutter build apk --release   # Outputs to build/app/outputs/flutter-apk/app-rel
 ## 🛡️ Privacy & Security Manifesto
 
 * **Local Subnet Only**: Transfers are strictly confined to your local LAN/WLAN. No packets leave your router.
-* **Encrypted Tokens**: Devices authenticate using unique cryptographic nonces; unauthorized machines on the same network cannot inject files.
-* **Zero Telemetry**: No tracking, no analytical beacons, no cloud accounts, and no data profiling.
+* **Pairing**: Flik is designed to pair devices before transfers. The v1 LAN transfer payload is not encrypted, and receiver authentication still needs hardening; use only on a trusted private network for now.
+* **Updates**: When online, Flik checks the public GitHub Releases API for new versions. File transfers remain local and do not go through GitHub.
+* **No Telemetry**: No analytics or advertising trackers, cloud accounts, or data profiling.
 
 ---
 
 ## 🤝 Contributing & Community
 
 Contributions, feature suggestions, and pull requests are welcomed with open arms!
-1. Fork the Project.
+1. Fork the [Flik repository](https://github.com/ashoka-2/Flik).
 2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`).
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`).
 4. Push to the Branch (`git push origin feature/AmazingFeature`).
@@ -236,7 +231,7 @@ Contributions, feature suggestions, and pull requests are welcomed with open arm
 
 <div align="center">
 
-Made with ⚡ by Ashok Kumar
+Made with ⚡ by [Ashok Kumar](https://github.com/ashoka-2)
 
 [Back to Top](#-flik)
 

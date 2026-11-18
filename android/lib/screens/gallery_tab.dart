@@ -68,7 +68,10 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
         final now = DateTime.now().millisecondsSinceEpoch;
         if (_selectedAssetIds.isNotEmpty && (now - lastGalleryFlickTime > 1200) && mounted) {
           lastGalleryFlickTime = now;
-          _sendSelectedDirectly(trajectoryX: trajX);
+          _sendSelectedDirectly(
+            trajectoryX: trajX,
+            trajectoryY: _sensorService?.currentTiltY,
+          );
         }
       },
     );
@@ -93,6 +96,8 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
   Future<void> _loadAlbums() async {
     setState(() => _isLoading = true);
+    _albumCounts.clear();
+    _albumCovers.clear();
     final permission = await PhotoManager.requestPermissionExtend();
     if (permission.isAuth || permission.hasAccess) {
       // Configure filterOption so MediaStore orders newest items first (descending createDate)
@@ -172,7 +177,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
         // Guarantee dedicated full-device Videos album if available
         if (videoAlbums.isNotEmpty) {
-          foundVideos = videoAlbums.first;
+          foundVideos = videoAlbums.firstWhere((album) => album.isAll, orElse: () => videoAlbums.first);
         }
 
         _albumCamera = foundCamera;
@@ -222,11 +227,18 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
       final cover = (await album.getAssetListPaged(page: 0, size: 1)).firstOrNull;
       if (mounted) {
         setState(() {
-          _albumCounts[album.id] = count;
-          _albumCovers[album.id] = cover;
+          final key = _albumKey(album);
+          _albumCounts[key] = count;
+          _albumCovers[key] = cover;
         });
       }
     }
+  }
+
+  String _albumKey(AssetPathEntity album) {
+    if (identical(album, _albumAll)) return '__all_media__';
+    if (identical(album, _albumVideos)) return '__all_videos__';
+    return album.id;
   }
 
   void _applySort(List<AssetEntity> list) {
@@ -316,7 +328,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     });
   }
 
-  Future<void> _sendSelectedDirectly({double? trajectoryX}) async {
+  Future<void> _sendSelectedDirectly({double? trajectoryX, double? trajectoryY}) async {
     final notifier = ref.read(flikAppProvider.notifier);
     final selectedAssets = _assets.where((a) => _selectedAssetIds.contains(a.id)).toList();
     if (selectedAssets.isEmpty) return;
@@ -344,7 +356,11 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 
     if (items.isNotEmpty) {
       setState(() => _selectedAssetIds.clear());
-      await notifier.sendItemsDirectly(items, trajectoryX: trajectoryX);
+      await notifier.sendItemsDirectly(
+        items,
+        trajectoryX: trajectoryX,
+        trajectoryY: trajectoryY,
+      );
     }
   }
 
@@ -456,7 +472,7 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    '${_selectedAlbum?.name ?? "Album"} (${_albumCounts[_selectedAlbum?.id] ?? _assets.length})',
+                    '${_formatAlbumName(_selectedAlbum!)} (${_albumCounts[_albumKey(_selectedAlbum!)] ?? _assets.length})',
                     style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: FlikTokens.text),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -582,14 +598,14 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
     // Filter by search query if user typed anything
     final filteredPrimary = _searchQuery.isEmpty
         ? primaryAlbums
-        : primaryAlbums.where((a) => a.name.toLowerCase().contains(_searchQuery)).toList();
+        : primaryAlbums.where((a) => _formatAlbumName(a).toLowerCase().contains(_searchQuery)).toList();
 
     final primaryIds = primaryAlbums.map((a) => a.id).toSet();
     final primaryNames = primaryAlbums.map((a) => _formatAlbumName(a).toLowerCase()).toSet();
     final uniqueOthers = _moreAlbums.where((a) {
       if (primaryIds.contains(a.id) || a.isAll) return false;
       final formatted = _formatAlbumName(a).toLowerCase();
-      if (primaryNames.contains(formatted) || formatted == 'all') return false;
+      if (primaryNames.contains(formatted) || formatted == 'all' || formatted == 'all photos') return false;
       return true;
     }).toList();
 
@@ -658,8 +674,9 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
 }
 
   Widget _buildAlbumCard(AssetPathEntity album) {
-    final count = _albumCounts[album.id] ?? 0;
-    final coverAsset = _albumCovers[album.id];
+    final key = _albumKey(album);
+    final count = _albumCounts[key] ?? 0;
+    final coverAsset = _albumCovers[key];
     final displayName = _formatAlbumName(album);
 
     return GestureDetector(
@@ -713,11 +730,12 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
   }
 
   String _formatAlbumName(AssetPathEntity album) {
-    if (album.id == _albumVideos?.id) return 'Videos';
+    if (identical(album, _albumAll)) return 'All photos';
+    if (identical(album, _albumVideos)) return 'Videos';
     if (album.id == _albumCamera?.id) return 'Camera';
     if (album.id == _albumFavorites?.id) return 'Favorites';
     if (album.id == _albumScreenshots?.id) return 'Screenshots';
-    if (album.id == _albumAll?.id || album.isAll) return 'All';
+    if (album.isAll) return 'All photos';
     final name = album.name;
     final lower = name.toLowerCase();
     if (lower == 'camera' || lower == 'dcim') return 'Camera';

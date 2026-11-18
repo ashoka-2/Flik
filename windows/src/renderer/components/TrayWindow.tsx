@@ -501,6 +501,36 @@ export const TrayWindow: React.FC = () => {
           Start with Windows
         </label>
       </div>
+
+      <div
+        style={{
+          padding: '12px 14px',
+          borderRadius: 16,
+          background: 'var(--surface)',
+          border: '1px solid var(--line)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>
+          About Flik
+        </span>
+        <button
+          className="btn-pill"
+          style={{ width: '100%', height: 34, fontSize: 12 }}
+          onClick={() => window.flik?.checkForUpdates()}
+        >
+          Check for updates
+        </button>
+        <button
+          className="btn-pill"
+          style={{ width: '100%', height: 34, fontSize: 12 }}
+          onClick={() => window.flik?.openUrl('https://github.com/ashoka-2')}
+        >
+          GitHub · @ashoka-2
+        </button>
+      </div>
     </div>
   );
 };

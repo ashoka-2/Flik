@@ -155,7 +155,11 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
 
     // Send item to connected PC and await completion
     final notifier = ref.read(flikAppProvider.notifier);
-    await notifier.sendItemsDirectly([item], trajectoryX: trajX);
+    await notifier.sendItemsDirectly(
+      [item],
+      trajectoryX: trajX,
+      trajectoryY: _sensorService?.currentTiltY,
+    );
 
     if (!mounted) return;
 
@@ -458,11 +462,11 @@ class _MediaViewerScreenState extends ConsumerState<MediaViewerScreen>
       // 100% full original resolution image
       mediaContent = Image.file(
         _currentFile!,
-        fit: BoxFit.cover,
+        fit: BoxFit.contain,
         errorBuilder: (_, __, ___) => FlikThumbnailImage(
           asset: asset,
           size: const ThumbnailSize.square(400),
-          fit: BoxFit.cover,
+          fit: BoxFit.contain,
         ),
       );
     } else {

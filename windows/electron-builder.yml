@@ -1,6 +1,11 @@
 appId: com.flik.connector
 productName: Flik Connector
 electronVersion: 31.3.1
+publish:
+  provider: github
+  owner: ashoka-2
+  repo: Flik
+  releaseType: release
 directories:
   output: release
   buildResources: build

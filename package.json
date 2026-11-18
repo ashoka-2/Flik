@@ -3,12 +3,30 @@
   "version": "0.1.0",
   "description": "Private local-network file and link transfer for Android and Windows",
   "private": true,
-  "workspaces": ["windows"],
+  "workspaces": [
+    "windows"
+  ],
   "scripts": {
     "verify:protocol": "node tools/verify-protocol.mjs",
     "test:integration": "node tools/run-integration-tests.mjs",
     "build:windows": "npm --workspace=windows run build",
     "package:windows": "npm --workspace=windows run package:dist",
     "start:windows": "npm --workspace=windows run start"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5",
+    "electron-updater": "^6.8.11",
+    "@types/busboy": "^1.5.4",
+    "@types/express": "^4.17.21",
+    "@types/heic-convert": "^2.1.1",
+    "@types/node": "^20.14.9",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1"
   }
 }

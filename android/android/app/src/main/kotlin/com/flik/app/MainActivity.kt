@@ -20,6 +20,7 @@ import java.io.FileOutputStream
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "flik/media_store"
     private val SHARE_CHANNEL = "flik/share_intake"
+    private val UPDATES_CHANNEL = "flik/updates"
     private var multicastLock: WifiManager.MulticastLock? = null
     private var shareChannel: MethodChannel? = null
     private var pendingSharedData: Map<String, Any?>? = null
@@ -190,6 +191,20 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("LOCK_ERROR", e.localizedMessage, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATES_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getVersion" -> {
+                    try {
+                        @Suppress("DEPRECATION")
+                        result.success(packageManager.getPackageInfo(packageName, 0).versionName)
+                    } catch (e: Exception) {
+                        result.error("VERSION_ERROR", e.localizedMessage, null)
                     }
                 }
                 else -> result.notImplemented()

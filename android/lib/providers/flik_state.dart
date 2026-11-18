@@ -274,7 +274,7 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
   int _lastSendTimestamp = 0;
 
   // Sends items directly without requiring prior staging
-  Future<bool> sendItemsDirectly(List<TransferItem> items, {double? trajectoryX}) async {
+  Future<bool> sendItemsDirectly(List<TransferItem> items, {double? trajectoryX, double? trajectoryY}) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (items.isEmpty || state.isSending || (now - _lastSendTimestamp < 1200)) return false;
     _lastSendTimestamp = now;
@@ -312,6 +312,7 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
         peer: peer,
         items: items,
         trajectoryX: trajectoryX ?? sensorService?.currentTiltX,
+        trajectoryY: trajectoryY ?? sensorService?.currentTiltY,
         onProgress: (p) => state = state.copyWith(sendProgress: p),
         onError: (err) => showToast(err),
       );
@@ -391,6 +392,7 @@ class FlikAppNotifier extends StateNotifier<FlikAppState> {
         peer: peer,
         items: state.stagedItems,
         trajectoryX: trajectoryX,
+        trajectoryY: sensorService?.currentTiltY,
         onProgress: (p) => state = state.copyWith(sendProgress: p),
         onError: (err) => showToast(err),
       );

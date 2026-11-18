@@ -28,6 +28,7 @@ import { InteractiveRect, ActiveTransferCard } from '../shared/types';
 import { FLIK_CONSTANTS, NORMALIZED_ERRORS } from '../shared/constants';
 import { validateUrl } from '../shared/sanitizer';
 import { sendFilesToPeer } from './client';
+import { autoUpdater } from 'electron-updater';
 
 // Register custom privileged scheme for loading local media thumbnails in cards
 protocol.registerSchemesAsPrivileged([
@@ -56,6 +57,11 @@ class FlikConnectorApp {
   private localIp: string = '127.0.0.1';
   private boundPort: number = FLIK_CONSTANTS.DEFAULT_PORT;
   private pendingPairings: Map<string, (accept: boolean) => void> = new Map();
+  private updateCheckInterval: NodeJS.Timeout | null = null;
+  private isCheckingForUpdate = false;
+  private isUpdatePromptOpen = false;
+  private manualUpdateCheck = false;
+  private dismissedPortableUpdate: string | null = null;
 
   constructor() {
     this.store = new FlikSettingsStore();
@@ -183,6 +189,7 @@ class FlikConnectorApp {
     this.createOverlays();
     this.setupIpc();
     this.setupServerEvents();
+    this.setupAutoUpdates();
 
     // Show the Flik Connector Dashboard window on launch so the user sees the app
     this.showTrayWindow();
@@ -561,6 +568,11 @@ class FlikConnectorApp {
 
   // Wires IPC events between the renderer and main process
   private setupIpc(): void {
+    ipcMain.handle('flik:check-for-updates', async () => {
+      await this.checkForUpdates(true);
+      return true;
+    });
+
     // Native drag-out from a Flik card into Windows Explorer, ChatGPT, etc.
     ipcMain.on('flik:start-drag', (event, filePath: string) => {
       try {
@@ -958,6 +970,218 @@ class FlikConnectorApp {
     });
   }
 
+  private setupAutoUpdates(): void {
+    if (!app.isPackaged) return;
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.on('checking-for-update', () => {
+      this.isCheckingForUpdate = true;
+    });
+    autoUpdater.on('update-available', (info: any) => {
+      this.isCheckingForUpdate = false;
+      this.manualUpdateCheck = false;
+      void this.promptToDownloadUpdate(info.version);
+    });
+    autoUpdater.on('update-not-available', () => {
+      this.isCheckingForUpdate = false;
+      if (this.manualUpdateCheck) {
+        void dialog.showMessageBox({
+          type: 'info',
+          title: 'Flik is up to date',
+          message: `You are using Flik ${app.getVersion()}, the latest available version.`,
+          buttons: ['OK'],
+        });
+      }
+      this.manualUpdateCheck = false;
+    });
+    autoUpdater.on('error', (error: any) => {
+      this.isCheckingForUpdate = false;
+      if (this.manualUpdateCheck) {
+        void dialog.showMessageBox({
+          type: 'error',
+          title: 'Could not check for updates',
+          message: 'Check your internet connection and try again.',
+          detail: error.message,
+          buttons: ['OK'],
+        });
+      }
+      this.manualUpdateCheck = false;
+      console.error('Flik update check failed:', error);
+    });
+    autoUpdater.on('update-downloaded', (info: any) => {
+      void this.promptToInstallUpdate(info.version);
+    });
+
+    setTimeout(() => void this.checkForUpdates(false), 8000);
+    this.updateCheckInterval = setInterval(() => void this.checkForUpdates(false), 6 * 60 * 60 * 1000);
+  }
+
+  private async checkForUpdates(manual: boolean): Promise<void> {
+    if (!app.isPackaged) {
+      if (manual) {
+        await dialog.showMessageBox({
+          type: 'info',
+          title: 'Update check unavailable',
+          message: 'Updates are checked in the installed Flik app.',
+          buttons: ['OK'],
+        });
+      }
+      return;
+    }
+    if (process.env.PORTABLE_EXECUTABLE_DIR) {
+      await this.checkPortableForUpdates(manual);
+      return;
+    }
+    if (this.isCheckingForUpdate) return;
+
+    this.manualUpdateCheck = manual;
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (error) {
+      this.isCheckingForUpdate = false;
+      if (manual) {
+        await dialog.showMessageBox({
+          type: 'error',
+          title: 'Could not check for updates',
+          message: 'Check your internet connection and try again.',
+          buttons: ['OK'],
+        });
+      }
+      console.error('Flik update check failed:', error);
+      this.manualUpdateCheck = false;
+    }
+  }
+
+  private async checkPortableForUpdates(manual: boolean): Promise<void> {
+    try {
+      const response = await net.fetch('https://api.github.com/repos/ashoka-2/Flik/releases?per_page=30', {
+        headers: { Accept: 'application/vnd.github+json' },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
+      const releases = await response.json() as Array<{
+        draft?: boolean;
+        tag_name?: string;
+        html_url?: string;
+        assets?: Array<{ name?: string; browser_download_url?: string }>;
+      }>;
+
+      const currentVersion = app.getVersion();
+      const candidates = releases
+        .filter((release) => !release.draft && release.tag_name && release.html_url?.startsWith('https://github.com/ashoka-2/Flik/releases/tag/'))
+        .map((release) => {
+          const version = release.tag_name!.replace(/^v/, '');
+          const setup = release.assets?.find((asset) => asset.name === `Flik.Connector.Setup.${version}.exe`);
+          const installerUrl = setup?.browser_download_url;
+          return { version, tag: release.tag_name!, installerUrl };
+        })
+        .filter((release) => release.installerUrl?.startsWith('https://github.com/ashoka-2/Flik/releases/download/'))
+        .filter((release) => this.isVersionNewer(release.version, currentVersion))
+        .sort((a, b) => this.compareVersions(b.version, a.version));
+
+      const update = candidates[0];
+      if (update) {
+        if (manual || this.dismissedPortableUpdate !== update.tag) {
+          this.dismissedPortableUpdate = update.tag;
+          await this.promptToDownloadPortableUpdate(update.version, update.installerUrl!);
+        }
+      } else if (manual) {
+        await dialog.showMessageBox({
+          type: 'info',
+          title: 'Flik is up to date',
+          message: `You are using Flik ${currentVersion}, the latest available version.`,
+          buttons: ['OK'],
+        });
+      }
+    } catch (error) {
+      console.error('Flik portable update check failed:', error);
+      if (manual) {
+        await dialog.showMessageBox({
+          type: 'error',
+          title: 'Could not check for updates',
+          message: 'Check your internet connection and try again.',
+          buttons: ['OK'],
+        });
+      }
+    }
+  }
+
+  private compareVersions(left: string, right: string): number {
+    const a = left.split('.').map((part) => Number.parseInt(part, 10) || 0);
+    const b = right.split('.').map((part) => Number.parseInt(part, 10) || 0);
+    for (let index = 0; index < Math.max(a.length, b.length); index++) {
+      const difference = (a[index] || 0) - (b[index] || 0);
+      if (difference !== 0) return difference;
+    }
+    return 0;
+  }
+
+  private isVersionNewer(candidate: string, current: string): boolean {
+    return this.compareVersions(candidate, current) > 0;
+  }
+
+  private async promptToDownloadPortableUpdate(version: string, installerUrl: string): Promise<void> {
+    if (this.isUpdatePromptOpen) return;
+    this.isUpdatePromptOpen = true;
+    try {
+      const result = await dialog.showMessageBox({
+        type: 'info',
+        title: 'Flik update available',
+        message: `Flik ${version} is available.`,
+        detail: 'Portable builds cannot install updates in the background. Open the signed installer download now?',
+        buttons: ['Open download', 'Cancel'],
+        cancelId: 1,
+        defaultId: 0,
+      });
+      if (result.response === 0) await shell.openExternal(installerUrl);
+    } finally {
+      this.isUpdatePromptOpen = false;
+    }
+  }
+
+  private async promptToDownloadUpdate(version: string): Promise<void> {
+    if (this.isUpdatePromptOpen) return;
+    this.isUpdatePromptOpen = true;
+    try {
+      const result = await dialog.showMessageBox({
+        type: 'info',
+        title: 'Flik update available',
+        message: `Flik ${version} is ready to download.`,
+        detail: 'Update now to download and install the latest version. Flik will restart when installation is ready.',
+        buttons: ['Update now', 'Cancel'],
+        cancelId: 1,
+        defaultId: 0,
+      });
+      if (result.response === 0) {
+        await autoUpdater.downloadUpdate();
+      }
+    } catch (error) {
+      console.error('Flik update download failed:', error);
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Update download failed',
+        message: 'Flik could not download the update. Please try again later.',
+        buttons: ['OK'],
+      });
+    } finally {
+      this.isUpdatePromptOpen = false;
+    }
+  }
+
+  private async promptToInstallUpdate(version: string): Promise<void> {
+    const result = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Flik is ready to update',
+      message: `Flik ${version} has been downloaded.`,
+      detail: 'Install and restart Flik now?',
+      buttons: ['Install now', 'Later'],
+      cancelId: 1,
+      defaultId: 0,
+    });
+    if (result.response === 0) autoUpdater.quitAndInstall();
+  }
+
   private getAllLocalIps(): Set<string> {
     const set = new Set<string>(['127.0.0.1', 'localhost', '::1']);
     try {
@@ -1042,6 +1266,10 @@ class FlikConnectorApp {
     if (this.cursorPollTimer) {
       clearInterval(this.cursorPollTimer);
       this.cursorPollTimer = null;
+    }
+    if (this.updateCheckInterval) {
+      clearInterval(this.updateCheckInterval);
+      this.updateCheckInterval = null;
     }
     this.server.stop();
     this.mdns.stop();

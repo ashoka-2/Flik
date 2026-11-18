@@ -7,7 +7,8 @@
   "properties": {
     "transferId": {"type": "string", "minLength": 1},
     "items": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["name", "size", "mime", "kind"], "properties": {"name": {"type": "string"}, "size": {"type": "integer", "minimum": 0}, "mime": {"type": "string"}, "kind": {"enum": ["file", "image", "video"]}}}},
-    "trajectoryX": {"type": "number"}
+    "trajectoryX": {"type": "number"},
+    "trajectoryY": {"type": "number"}
   },
   "additionalProperties": false
 }

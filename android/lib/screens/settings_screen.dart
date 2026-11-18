@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/flik_state.dart';
 import '../services/storage_service.dart';
+import '../services/update_service.dart';
 import '../theme/tokens.dart';
 import 'add_device_dialog.dart';
 
@@ -22,6 +24,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   double _cacheSizeMb = 0.0;
   bool _isClearingCache = false;
+  bool _isCheckingUpdates = false;
   String? _receiveFolder;
   int _retentionHours = 168; // 7 days default
   late TextEditingController _nameController;
@@ -113,6 +116,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await widget.storage.setDeviceName(newName);
       ref.read(flikAppProvider.notifier).showToast('Device name saved: $newName');
     }
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (_isCheckingUpdates) return;
+    setState(() => _isCheckingUpdates = true);
+    final notifier = ref.read(flikAppProvider.notifier);
+    try {
+      final update = await UpdateService().checkForUpdate();
+      if (!mounted) return;
+      if (update == null) {
+        notifier.showToast('Flik is up to date.');
+        return;
+      }
+
+      final shouldUpdate = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: FlikTokens.surface,
+          title: Text('Flik ${update.version} is available'),
+          content: const Text('Download the new APK? Android will ask you to confirm the installation.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Update now'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldUpdate == true) {
+        final opened = await launchUrl(Uri.parse(update.apkUrl), mode: LaunchMode.externalApplication);
+        if (!opened) notifier.showToast('Could not open the APK download.');
+      }
+    } catch (_) {
+      if (mounted) notifier.showToast('Could not check for updates. Try again when online.');
+    } finally {
+      if (mounted) setState(() => _isCheckingUpdates = false);
+    }
+  }
+
+  Future<void> _openGitHubProfile() async {
+    await launchUrl(Uri.parse('https://github.com/ashoka-2'), mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -331,6 +380,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   },
                   icon: const Icon(Icons.add, size: 16),
                   label: const Text('Add IP'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: FlikTokens.accentSoft,
+                    side: const BorderSide(color: FlikTokens.line),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 6. Updates and project links
+          _buildSectionHeader('About Flik'),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: FlikTokens.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: FlikTokens.line),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _isCheckingUpdates ? null : _checkForUpdates,
+                  icon: _isCheckingUpdates
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.system_update_alt, size: 18),
+                  label: Text(_isCheckingUpdates ? 'Checking…' : 'Check for updates'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: FlikTokens.raised,
+                    foregroundColor: FlikTokens.text,
+                    elevation: 0,
+                    side: const BorderSide(color: FlikTokens.line),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _openGitHubProfile,
+                  icon: const Icon(Icons.code, size: 18),
+                  label: const Text('GitHub · @ashoka-2'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: FlikTokens.accentSoft,
                     side: const BorderSide(color: FlikTokens.line),

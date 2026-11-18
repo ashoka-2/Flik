@@ -60,7 +60,14 @@ export const OverlayApp: React.FC = () => {
       // Position across screen: -1 is left, 0 is center, +1 is right
       const rawX = (screenW / 2) + (normalizedTraj * (screenW * 0.40)) - (cardWidth / 2);
       const targetX = Math.round(Math.max(30, Math.min(screenW - cardWidth - 30, rawX)));
-      const targetY = Math.round(Math.max(100, screenH * 0.38));
+      const hasVerticalAim = typeof newCard.trajectoryY === 'number';
+      const normalizedY = hasVerticalAim
+        ? Math.max(-1, Math.min(1, newCard.trajectoryY as number))
+        : 0;
+      const rawY = hasVerticalAim
+        ? (screenH / 2) - (normalizedY * screenH * 0.36) - 130
+        : screenH * 0.38;
+      const targetY = Math.round(Math.max(30, Math.min(screenH - 300, rawY)));
 
       const placedCard = {
         ...newCard,

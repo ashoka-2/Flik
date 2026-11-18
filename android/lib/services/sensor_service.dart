@@ -16,6 +16,8 @@ class SensorService {
 
   // Real-time horizontal tilt (-1.0 left to +1.0 right)
   double currentTiltX = 0.0;
+  // Real-time vertical aim (-1.0 down to +1.0 up), used as a landing hint.
+  double currentTiltY = 0.0;
 
   final void Function(double trajectoryX) onFlick;
   final void Function(double headingDegrees)? onHeadingChanged;
@@ -33,6 +35,7 @@ class SensorService {
         (AccelerometerEvent event) {
           // In portrait: tilt left produces negative x, tilt right produces positive x
           currentTiltX = (-event.x / 3.5).clamp(-1.0, 1.0);
+          currentTiltY = (-event.y / 3.5).clamp(-1.0, 1.0);
         },
         onError: (_) {},
         cancelOnError: false,

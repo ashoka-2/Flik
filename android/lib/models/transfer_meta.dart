@@ -5,17 +5,20 @@ class TransferMeta {
   final String transferId;
   final List<TransferItem> items;
   final double? trajectoryX;
+  final double? trajectoryY;
 
   TransferMeta({
     required this.transferId,
     required this.items,
     this.trajectoryX,
+    this.trajectoryY,
   });
 
   Map<String, dynamic> toJson() => {
     'transferId': transferId,
     'items': items.map((e) => e.toMetaItem()).toList(),
     if (trajectoryX != null) 'trajectoryX': trajectoryX,
+    if (trajectoryY != null) 'trajectoryY': trajectoryY,
   };
 
   factory TransferMeta.fromJson(Map<String, dynamic> json) {
@@ -35,6 +38,7 @@ class TransferMeta {
       transferId: json['transferId'] as String,
       items: parsedItems,
       trajectoryX: (json['trajectoryX'] as num?)?.toDouble(),
+      trajectoryY: (json['trajectoryY'] as num?)?.toDouble(),
     );
   }
 }

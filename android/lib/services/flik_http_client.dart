@@ -29,6 +29,7 @@ class FlikHttpClient {
     required DiscoveredPeer peer,
     required List<TransferItem> items,
     double? trajectoryX,
+    double? trajectoryY,
     required void Function(double progress) onProgress,
     required void Function(String error) onError,
   }) async {
@@ -84,6 +85,7 @@ class FlikHttpClient {
       transferId: transferId,
       items: items,
       trajectoryX: trajectoryX,
+      trajectoryY: trajectoryY,
     );
 
     try {

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_handler/share_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import '../models/transfer_item.dart';
 import '../providers/flik_state.dart';
@@ -11,6 +12,7 @@ import '../theme/tokens.dart';
 import '../widgets/radar_view.dart';
 import '../widgets/staged_deck_widget.dart';
 import '../widgets/error_normalizer_toast.dart';
+import '../services/update_service.dart';
 import 'gallery_tab.dart';
 import 'files_and_links_tab.dart';
 import 'received_files_tab.dart';
@@ -34,6 +36,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   double _radarHeightFactor = 0.32; // Default 32% screen height
   bool _isRadarCollapsed = false;
   StreamSubscription? _mediaStreamSub;
+  Timer? _initialUpdateCheck;
+  Timer? _periodicUpdateCheck;
+  bool _isUpdatePromptOpen = false;
+  String? _lastPromptedUpdateTag;
 
   static const _shareChannel = MethodChannel('flik/share_intake');
 
@@ -41,6 +47,44 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   void initState() {
     super.initState();
     _initShareHandler();
+    _initialUpdateCheck = Timer(const Duration(seconds: 6), () => _checkForUpdate());
+    _periodicUpdateCheck = Timer.periodic(const Duration(hours: 6), (_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    if (!mounted || _isUpdatePromptOpen) return;
+    try {
+      final update = await UpdateService().checkForUpdate();
+      if (!mounted || update == null || update.tagName == _lastPromptedUpdateTag) return;
+      _lastPromptedUpdateTag = update.tagName;
+      _isUpdatePromptOpen = true;
+
+      final shouldUpdate = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: FlikTokens.surface,
+          title: Text('Flik ${update.version} is available'),
+          content: const Text('Download the latest version? Android will ask you to confirm the installation.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Update now'),
+            ),
+          ],
+        ),
+      );
+      if (shouldUpdate == true) {
+        await launchUrl(Uri.parse(update.apkUrl), mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      // Update checks are best-effort and stay quiet while Flik is offline.
+    } finally {
+      _isUpdatePromptOpen = false;
+    }
   }
 
   void _initShareHandler() async {
@@ -247,6 +291,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   @override
   void dispose() {
     _mediaStreamSub?.cancel();
+    _initialUpdateCheck?.cancel();
+    _periodicUpdateCheck?.cancel();
     super.dispose();
   }
 
