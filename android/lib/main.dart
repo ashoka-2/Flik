@@ -45,9 +45,11 @@ class FlikApp extends StatelessWidget {
       themeMode: ThemeMode.dark,
       // Clamp text scale to 1.0 so enlarged system accessibility font sizes never break layouts
       builder: (context, child) {
+        // Keep Flik's typeface fixed while adapting its overall text scale to phone width.
+        final widthScale = (MediaQuery.sizeOf(context).width / 390).clamp(0.90, 1.12);
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(
-            textScaler: const TextScaler.linear(1.0),
+            textScaler: TextScaler.linear(widthScale),
           ),
           child: child ?? const SizedBox(),
         );

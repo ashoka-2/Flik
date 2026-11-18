@@ -493,32 +493,31 @@ class FlikConnectorApp {
     // When files finish streaming into temp workspace, display them on the specific targeted monitor
     this.server.on('transfer-received', (card: ActiveTransferCard) => {
       const allDisplays = screen.getAllDisplays();
-      // Sort displays left-to-right by bounds.x
-      allDisplays.sort((a, b) => a.bounds.x - b.bounds.x);
-
-      const traj = typeof card.trajectoryX === 'number' ? card.trajectoryX : 0.0;
-      const normalizedTraj = Math.max(-1.0, Math.min(1.0, traj));
-
-      let targetDisplay = allDisplays[0];
-      let subTraj = normalizedTraj;
-
-      if (allDisplays.length > 1) {
-        // Map normalizedTraj (-1.0 to +1.0) into discrete sectors for each display
-        const t = (normalizedTraj + 1.0) / 2.0; // 0.0 to 1.0
-        const index = Math.min(allDisplays.length - 1, Math.floor(t * allDisplays.length));
-        targetDisplay = allDisplays[index];
-
-        // Compute local trajectory within the selected display (-1.0 to 1.0)
-        const sectorWidth = 1.0 / allDisplays.length;
-        const localT = (t - index * sectorWidth) / sectorWidth;
-        subTraj = localT * 2.0 - 1.0;
-      }
+      const trajectoryX = typeof card.trajectoryX === 'number' ? Math.max(-1, Math.min(1, card.trajectoryX)) : 0;
+      const trajectoryY = typeof card.trajectoryY === 'number' ? Math.max(-1, Math.min(1, card.trajectoryY)) : 0;
+      const left = Math.min(...allDisplays.map((display) => display.bounds.x));
+      const top = Math.min(...allDisplays.map((display) => display.bounds.y));
+      const right = Math.max(...allDisplays.map((display) => display.bounds.x + display.bounds.width));
+      const bottom = Math.max(...allDisplays.map((display) => display.bounds.y + display.bounds.height));
+      const aimedX = left + ((trajectoryX + 1) / 2) * (right - left);
+      const aimedY = top + ((1 - trajectoryY) / 2) * (bottom - top);
+      const squaredDistanceToDisplay = (display: (typeof allDisplays)[number]) => {
+        const { x, y, width, height } = display.bounds;
+        const dx = Math.max(x - aimedX, 0, aimedX - (x + width));
+        const dy = Math.max(y - aimedY, 0, aimedY - (y + height));
+        return dx * dx + dy * dy;
+      };
+      const targetDisplay = allDisplays.reduce((closest, display) =>
+        squaredDistanceToDisplay(display) < squaredDistanceToDisplay(closest) ? display : closest,
+      allDisplays[0]);
 
       const { bounds } = targetDisplay;
       const cardWidth = 320;
-      const centerX = bounds.width * 0.5 + subTraj * (bounds.width * 0.38) - (cardWidth / 2);
-      card.x = Math.round(Math.max(40, Math.min(bounds.width - cardWidth - 40, centerX)));
-      card.y = Math.round(Math.max(100, bounds.height * 0.32));
+      const cardHeight = 300;
+      const localX = aimedX - bounds.x;
+      const localY = aimedY - bounds.y;
+      card.x = Math.round(Math.max(30, Math.min(bounds.width - cardWidth - 30, localX - cardWidth / 2)));
+      card.y = Math.round(Math.max(30, Math.min(bounds.height - cardHeight - 30, localY - cardHeight / 2)));
 
       // Land ONLY on targetDisplay's overlay window - NEVER duplicate across screens
       const targetWin = this.overlayWindows.get(targetDisplay.id);

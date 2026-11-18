@@ -169,45 +169,19 @@ class _FilesAndLinksTabState extends ConsumerState<FilesAndLinksTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: FlikTokens.accent.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.folder_open, color: FlikTokens.accentSoft, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final narrow = constraints.maxWidth < 420;
+                  final title = const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Send Any File',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: FlikTokens.text),
-                        ),
-                        Text(
-                          'PDFs, APKs, Documents, Audio, Archives',
-                          style: TextStyle(fontSize: 11, color: FlikTokens.muted),
-                        ),
+                        Text('Send Any File', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: FlikTokens.text)),
+                        Text('PDFs, APKs, Documents, Audio, Archives', style: TextStyle(fontSize: 11, color: FlikTokens.muted), maxLines: 2, overflow: TextOverflow.ellipsis),
                       ],
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, size: 18, color: FlikTokens.muted),
-                    tooltip: 'Reload & check clipboard',
-                    onPressed: () {
-                      _checkClipboard();
-                      setState(() {
-                        _pickedFiles.clear();
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 4),
-                  ElevatedButton.icon(
+                  );
+                  final pickButton = ElevatedButton.icon(
                     onPressed: _pickFiles,
                     icon: const Icon(Icons.add, size: 16),
                     label: const Text('Pick Files'),
@@ -217,8 +191,30 @@ class _FilesAndLinksTabState extends ConsumerState<FilesAndLinksTab> {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                  ),
-                ],
+                  );
+                  final reloadButton = IconButton(
+                    icon: const Icon(Icons.refresh, size: 18, color: FlikTokens.muted),
+                    tooltip: 'Reload & check clipboard',
+                    onPressed: () {
+                      _checkClipboard();
+                      setState(() => _pickedFiles.clear());
+                    },
+                  );
+                  final icon = Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(color: FlikTokens.accent.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.folder_open, color: FlikTokens.accentSoft, size: 20),
+                  );
+                  if (narrow) {
+                    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [icon, const SizedBox(width: 12), title]),
+                      const SizedBox(height: 12),
+                      Row(children: [reloadButton, const SizedBox(width: 6), Expanded(child: pickButton)]),
+                    ]);
+                  }
+                  return Row(children: [icon, const SizedBox(width: 12), title, reloadButton, pickButton]);
+                },
               ),
 
               if (_pickedFiles.isNotEmpty) ...[
@@ -259,8 +255,9 @@ class _FilesAndLinksTabState extends ConsumerState<FilesAndLinksTab> {
                   );
                 }),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
+                LayoutBuilder(builder: (context, constraints) {
+                  if (constraints.maxWidth < 420) {
+                    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     OutlinedButton(
                       onPressed: _stagePickedFiles,
                       style: OutlinedButton.styleFrom(
@@ -269,30 +266,36 @@ class _FilesAndLinksTabState extends ConsumerState<FilesAndLinksTab> {
                       ),
                       child: const Text('Stage (Flik to Send)', style: TextStyle(color: FlikTokens.text, fontSize: 12)),
                     ),
-                    const Spacer(),
-                    IconButton(
-                    icon: const Icon(Icons.refresh, size: 18, color: FlikTokens.muted),
-                    tooltip: 'Reload & check clipboard',
-                    onPressed: () {
-                      _checkClipboard();
-                      setState(() {
-                        _pickedFiles.clear();
-                      });
-                    },
-                  ),
-                  const SizedBox(width: 4),
-                  ElevatedButton.icon(
+                    const SizedBox(height: 6),
+                    Row(children: [
+                  Expanded(child: OutlinedButton(
+                      onPressed: _stagePickedFiles,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: FlikTokens.line),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Stage', style: TextStyle(color: FlikTokens.text, fontSize: 12)),
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: ElevatedButton.icon(
                       onPressed: _sendPickedFilesDirectly,
                       icon: const Icon(Icons.arrow_upward, size: 16),
-                      label: const Text('Send Directly'),
+                      label: const Text('Send'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: FlikTokens.accent,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                    ),
-                  ],
-                ),
+                    )),
+                    ]),
+                    ]);
+                  }
+                  return Row(children: [
+                    OutlinedButton(onPressed: _stagePickedFiles, style: OutlinedButton.styleFrom(side: const BorderSide(color: FlikTokens.line), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text('Stage (Flik to Send)', style: TextStyle(color: FlikTokens.text, fontSize: 12))),
+                    const Spacer(),
+                    ElevatedButton.icon(onPressed: _sendPickedFilesDirectly, icon: const Icon(Icons.arrow_upward, size: 16), label: const Text('Send Directly'), style: ElevatedButton.styleFrom(backgroundColor: FlikTokens.accent, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)))),
+                  ]);
+                }),
               ],
             ],
           ),

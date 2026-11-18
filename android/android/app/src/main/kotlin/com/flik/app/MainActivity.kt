@@ -3,12 +3,14 @@ package com.flik.app
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -21,6 +23,7 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "flik/media_store"
     private val SHARE_CHANNEL = "flik/share_intake"
     private val UPDATES_CHANNEL = "flik/updates"
+    private val FILES_CHANNEL = "flik/files"
     private var multicastLock: WifiManager.MulticastLock? = null
     private var shareChannel: MethodChannel? = null
     private var pendingSharedData: Map<String, Any?>? = null
@@ -205,6 +208,38 @@ class MainActivity : FlutterActivity() {
                         result.success(packageManager.getPackageInfo(packageName, 0).versionName)
                     } catch (e: Exception) {
                         result.error("VERSION_ERROR", e.localizedMessage, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FILES_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openFile" -> {
+                    val filePath = call.argument<String>("path")
+                    val mimeType = call.argument<String>("mimeType") ?: "*/*"
+                    if (filePath.isNullOrBlank()) {
+                        result.error("INVALID_ARGS", "Missing file path", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        val file = File(filePath)
+                        if (!file.isFile) {
+                            result.error("FILE_NOT_FOUND", "The received file is no longer available", null)
+                            return@setMethodCallHandler
+                        }
+                        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                        val openIntent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(uri, mimeType)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(openIntent)
+                        result.success(true)
+                    } catch (_: ActivityNotFoundException) {
+                        result.error("NO_HANDLER", "No installed app can open this file type", null)
+                    } catch (e: Exception) {
+                        result.error("OPEN_FAILED", e.localizedMessage ?: "Could not open file", null)
                     }
                 }
                 else -> result.notImplemented()

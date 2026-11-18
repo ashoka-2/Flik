@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/history_entry.dart';
@@ -19,6 +20,7 @@ class ReceivedFilesTab extends ConsumerStatefulWidget {
 }
 
 class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
+  static const _fileChannel = MethodChannel('flik/files');
   String _selectedFilter = 'All';
   final List<String> _filters = ['All', 'Photos', 'Videos', 'Audio', 'Files', 'Links'];
 
@@ -38,6 +40,11 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
       if (_selectedFilter == 'Files') return e.kind == 'file';
       return true;
     }).toList();
+    final receivedPathCounts = <String, int>{};
+    for (final entry in receivedEntries) {
+      final path = entry.localPath;
+      if (path != null) receivedPathCounts.update(path, (count) => count + 1, ifAbsent: () => 1);
+    }
 
     return Column(
       children: [
@@ -110,7 +117,8 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, idx) {
                       final entry = receivedEntries[idx];
-                      return _buildReceivedCard(context, entry, notifier);
+                      final legacySharedPath = entry.localPath != null && (receivedPathCounts[entry.localPath] ?? 0) > 1;
+                      return _buildReceivedCard(context, entry, notifier, legacySharedPath: legacySharedPath);
                     },
                   ),
                 ),
@@ -119,12 +127,40 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
     );
   }
 
-  Widget _buildReceivedCard(BuildContext context, TransferHistoryEntry entry, dynamic notifier) {
+  Widget _buildReceivedCard(
+    BuildContext context,
+    TransferHistoryEntry entry,
+    dynamic notifier, {
+    required bool legacySharedPath,
+  }) {
     final isUrl = entry.kind == 'url' || entry.kind == 'link' || entry.itemsCount == 0;
     final isVideo = entry.kind == 'video';
     final isAudio = entry.kind == 'audio';
     final isImage = entry.kind == 'image' || entry.kind == 'photo';
-    final hasLocalFile = entry.localPath != null && File(entry.localPath!).existsSync();
+    final hasLocalFile = !legacySharedPath && entry.localPath != null && File(entry.localPath!).existsSync();
+    Future<void> openEntry() async {
+      if (isUrl) {
+        final uri = Uri.tryParse(entry.summaryName);
+        if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          notifier.showToast('This link is not valid');
+        }
+      } else if (hasLocalFile) {
+        try {
+          await _fileChannel.invokeMethod<bool>('openFile', {
+            'path': entry.localPath,
+            'mimeType': _mimeFor(entry.localPath!),
+          });
+        } on PlatformException catch (error) {
+          notifier.showToast(error.message ?? 'No app can open this file');
+        } catch (_) {
+          notifier.showToast('Could not open this file');
+        }
+      } else {
+        notifier.showToast('This received file is no longer available on this device');
+      }
+    }
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -136,7 +172,10 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
       child: Row(
         children: [
           // Media Thumbnail or Icon Badge
-          Container(
+          InkWell(
+            onTap: openEntry,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
             width: 52,
             height: 52,
             decoration: BoxDecoration(
@@ -146,7 +185,11 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
             ),
             clipBehavior: Clip.antiAlias,
             child: hasLocalFile && isImage
-                ? Image.file(File(entry.localPath!), fit: BoxFit.cover)
+                ? Image.file(
+                    File(entry.localPath!),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image_outlined, color: FlikTokens.muted)),
+                  )
                 : Center(
                     child: Icon(
                       isUrl
@@ -155,7 +198,9 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
                               ? Icons.videocam
                               : isAudio
                                   ? Icons.music_note
-                                  : Icons.insert_drive_file,
+                                  : isImage
+                                      ? Icons.image
+                                      : Icons.insert_drive_file,
                       color: isUrl
                           ? Colors.amber
                           : isAudio
@@ -166,6 +211,7 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
                       size: 26,
                     ),
                   ),
+          ),
           ),
           const SizedBox(width: 12),
 
@@ -202,18 +248,25 @@ class _ReceivedFilesTabState extends ConsumerState<ReceivedFilesTab> {
           IconButton(
             icon: Icon(isUrl ? Icons.open_in_browser : Icons.open_in_new, size: 20, color: FlikTokens.accentSoft),
             tooltip: isUrl ? 'Open Link' : 'Open File',
-            onPressed: () async {
-              if (isUrl) {
-                final uri = Uri.tryParse(entry.summaryName);
-                if (uri != null) launchUrl(uri, mode: LaunchMode.externalApplication);
-              } else if (hasLocalFile) {
-                notifier.showToast('File located at: ${entry.localPath}');
-              }
-            },
+            onPressed: openEntry,
           ),
         ],
       ),
     );
+  }
+
+  String _mimeFor(String path) {
+    final extension = path.split('.').last.toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif', 'webp': 'image/webp', 'heic': 'image/heic',
+      'mp4': 'video/mp4', 'mov': 'video/quicktime', 'mkv': 'video/x-matroska',
+      'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'wav': 'audio/wav', 'pdf': 'application/pdf',
+      'txt': 'text/plain', 'doc': 'application/msword', 'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel', 'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint', 'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'apk': 'application/vnd.android.package-archive', 'zip': 'application/zip',
+    };
+    return mimeTypes[extension] ?? '*/*';
   }
 
   String _formatTimestamp(DateTime dt) {

@@ -897,52 +897,56 @@ class _GalleryTabState extends ConsumerState<GalleryTab> {
       ),
       child: SafeArea(
         top: false,
-        child: Row(
-          children: [
-            Column(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final actions = [
+              OutlinedButton(
+                onPressed: () => setState(() => _selectedAssetIds.clear()),
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: FlikTokens.line)),
+                child: const Text('Cancel', style: TextStyle(fontSize: 12, color: FlikTokens.muted)),
+              ),
+              OutlinedButton(
+                onPressed: _stageSelected,
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: FlikTokens.line)),
+                child: const Text('Stage', style: TextStyle(fontSize: 12, color: FlikTokens.text)),
+              ),
+              ElevatedButton.icon(
+                onPressed: _sendSelectedDirectly,
+                icon: const Icon(Icons.arrow_upward, size: 16),
+                label: const Text('Send'),
+                style: ElevatedButton.styleFrom(backgroundColor: FlikTokens.accent, foregroundColor: Colors.white),
+              ),
+            ];
+            final summary = Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${_selectedAssetIds.length} selected',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: FlikTokens.text),
-                ),
-                const Text(
-                  'Flick phone or tap Send',
-                  style: TextStyle(fontSize: 11, color: FlikTokens.accentSoft),
-                ),
+                Text('${_selectedAssetIds.length} selected', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: FlikTokens.text)),
+                const Text('Flick phone or tap Send', style: TextStyle(fontSize: 11, color: FlikTokens.accentSoft)),
               ],
-            ),
-            const Spacer(),
-            OutlinedButton(
-              onPressed: () => setState(() => _selectedAssetIds.clear()),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: FlikTokens.line),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              child: const Text('Cancel', style: TextStyle(fontSize: 12, color: FlikTokens.muted)),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: _stageSelected,
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: FlikTokens.line),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              ),
-              child: const Text('Stage', style: TextStyle(fontSize: 12, color: FlikTokens.text)),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: _sendSelectedDirectly,
-              icon: const Icon(Icons.arrow_upward, size: 16),
-              label: const Text('Send'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: FlikTokens.accent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              ),
-            ),
-          ],
+            );
+
+            if (constraints.maxWidth < 440) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  summary,
+                  const SizedBox(height: 8),
+                  Row(children: [for (var i = 0; i < actions.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 6),
+                    Expanded(child: actions[i]),
+                  ]]),
+                ],
+              );
+            }
+            return Row(children: [summary, const Spacer(), ...[
+              for (var i = 0; i < actions.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                actions[i],
+              ],
+            ]]);
+          },
         ),
       ),
     );

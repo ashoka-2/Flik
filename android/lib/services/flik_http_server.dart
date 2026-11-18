@@ -220,6 +220,8 @@ class FlikHttpServer {
       }
 
       _isReceiving = true;
+      // Keep rollback tracking scoped to this request; completed file paths stay valid in history.
+      _partialFiles.clear();
       Timer? watchdog;
 
       void resetWatchdog() {
@@ -235,7 +237,7 @@ class FlikHttpServer {
         final formDataReq = req.formData();
         final tempDir = await Directory.systemTemp.createTemp('flik_rx_');
         TransferMeta? meta;
-        final savedFiles = <String>[];
+        final receivedFiles = <Map<String, Object>>[];
         int totalBytes = 0;
 
         if (formDataReq != null) {
@@ -252,7 +254,8 @@ class FlikHttpServer {
             } else {
               final rawName = formField.filename ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
               final safeName = rawName.replaceAll(RegExp(r'[^\w\.\-\s]'), '_');
-              final tempFile = File('${tempDir.path}/$safeName');
+              final uniqueName = _uniqueName(tempDir, safeName);
+              final tempFile = File('${tempDir.path}/$uniqueName');
               await tempFile.writeAsBytes(bytes);
 
               // Save received file without creating duplicate gallery entries
@@ -270,7 +273,7 @@ class FlikHttpServer {
 
               if (customPath != null && Directory(customPath).existsSync()) {
                 try {
-                  final destFile = File('$customPath/$safeName');
+                  final destFile = File('$customPath/${_uniqueName(Directory(customPath), safeName)}');
                   await destFile.writeAsBytes(bytes);
                   finalSavedPath = destFile.path;
                 } catch (_) {}
@@ -292,7 +295,13 @@ class FlikHttpServer {
                 } catch (_) {}
               }
               _partialFiles.add(File(finalSavedPath));
-              savedFiles.add(safeName);
+              final mime = meta?.items.where((item) => item.name == rawName).firstOrNull?.mime ?? _mimeForName(safeName);
+              receivedFiles.add({
+                'name': safeName,
+                'path': finalSavedPath,
+                'bytes': bytes.length,
+                'kind': _kindForName(safeName, mime),
+              });
             }
           }
         }
@@ -301,30 +310,45 @@ class FlikHttpServer {
         _isReceiving = false;
 
         // Record history
-        final senderName = meta?.items.firstOrNull?.name ?? (savedFiles.isNotEmpty ? savedFiles.first : 'Received Files');
-        final firstSavedPath = _partialFiles.isNotEmpty ? _partialFiles.first.path : null;
-        final isImg = senderName.toLowerCase().endsWith('.jpg') || senderName.toLowerCase().endsWith('.png') || senderName.toLowerCase().endsWith('.webp') || senderName.toLowerCase().endsWith('.heic');
-        final isVid = senderName.toLowerCase().endsWith('.mp4') || senderName.toLowerCase().endsWith('.mov') || senderName.toLowerCase().endsWith('.mkv');
-
         try {
-          await storage.addHistoryEntry(
-            TransferHistoryEntry(
-              id: meta?.transferId ?? const Uuid().v4(),
+          final transferId = meta?.transferId ?? const Uuid().v4();
+          final receivedAt = DateTime.now();
+          if (receivedFiles.isEmpty) {
+            await storage.addHistoryEntry(TransferHistoryEntry(
+              id: transferId,
               deviceName: 'Flik Peer',
               isOutbound: false,
-              itemsCount: savedFiles.length,
+              itemsCount: 0,
               totalBytes: totalBytes,
-              timestamp: DateTime.now(),
-              summaryName: senderName,
+              timestamp: receivedAt,
+              summaryName: 'Received Files',
               status: 'completed',
-              localPath: firstSavedPath,
-              kind: isImg ? 'image' : (isVid ? 'video' : 'file'),
-            ),
-          );
+              kind: 'file',
+            ));
+          } else {
+            for (var index = 0; index < receivedFiles.length; index++) {
+              final received = receivedFiles[index];
+              await storage.addHistoryEntry(TransferHistoryEntry(
+                id: '${transferId}_$index',
+                deviceName: 'Flik Peer',
+                isOutbound: false,
+                itemsCount: 1,
+                totalBytes: received['bytes']! as int,
+                timestamp: receivedAt,
+                summaryName: received['name']! as String,
+                status: 'completed',
+                localPath: received['path']! as String,
+                kind: received['kind']! as String,
+              ));
+            }
+          }
         } catch (_) {}
 
+        // These completed files are retained for history/open; remove them from rollback tracking.
+        _partialFiles.clear();
+
         try {
-          onToast('Received ${savedFiles.length} item(s)');
+          onToast('Received ${receivedFiles.length} item(s)');
         } catch (_) {}
 
         try {
@@ -402,6 +426,36 @@ class FlikHttpServer {
       } catch (_) {}
     }
     _partialFiles.clear();
+  }
+
+  String _uniqueName(Directory directory, String name) {
+    var candidate = name;
+    var suffix = 1;
+    final dot = name.lastIndexOf('.');
+    final stem = dot > 0 ? name.substring(0, dot) : name;
+    final extension = dot > 0 ? name.substring(dot) : '';
+    while (File('${directory.path}/$candidate').existsSync()) {
+      candidate = '$stem ($suffix)$extension';
+      suffix++;
+    }
+    return candidate;
+  }
+
+  String _mimeForName(String name) {
+    final extension = name.toLowerCase().split('.').last;
+    const types = {
+      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'webp': 'image/webp', 'heic': 'image/heic',
+      'gif': 'image/gif', 'mp4': 'video/mp4', 'mov': 'video/quicktime', 'mkv': 'video/x-matroska',
+      'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'wav': 'audio/wav', 'pdf': 'application/pdf',
+    };
+    return types[extension] ?? 'application/octet-stream';
+  }
+
+  String _kindForName(String name, String mime) {
+    if (mime.startsWith('image/')) return 'image';
+    if (mime.startsWith('video/')) return 'video';
+    if (mime.startsWith('audio/')) return 'audio';
+    return 'file';
   }
 
   // Starts server sequentially testing ports 54321 to 54330
